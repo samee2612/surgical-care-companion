@@ -1,0 +1,86 @@
+version: '3.8'
+
+services:
+  backend:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+      - redis
+    environment:
+      - DATABASE_URL=postgresql://user:password@db:5432/tka_voice
+      - REDIS_URL=redis://redis:6379
+      - ENVIRONMENT=development
+    volumes:
+      - ./backend:/app/backend
+      - ./tests:/app/tests
+    command: uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    volumes:
+      - ./frontend/src:/app/src
+      - ./frontend/public:/app/public
+    environment:
+      - REACT_APP_API_URL=http://localhost:8000
+      - CHOKIDAR_USEPOLLING=true
+
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: tka_voice
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init_db.sql:/docker-entrypoint-initdb.d/init.sql
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+  celery_worker:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      - db
+      - redis
+    environment:
+      - DATABASE_URL=postgresql://user:password@db:5432/tka_voice
+      - REDIS_URL=redis://redis:6379
+    volumes:
+      - ./backend:/app/backend
+    command: celery -A backend.tasks.celery_app worker --loglevel=info
+
+  celery_beat:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      - db
+      - redis
+    environment:
+      - DATABASE_URL=postgresql://user:password@db:5432/tka_voice
+      - REDIS_URL=redis://redis:6379
+    volumes:
+      - ./backend:/app/backend
+    command: celery -A backend.tasks.celery_app beat --loglevel=info
+
+volumes:
+  postgres_data:
+  redis_data: 
