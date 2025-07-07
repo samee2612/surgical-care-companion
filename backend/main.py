@@ -14,12 +14,12 @@ from pathlib import Path
 # Add the backend directory to Python path
 sys.path.append(str(Path(__file__).parent.parent))
 
-from backend.config import settings
-from backend.api.patients import router as patients_router
-from backend.api.calls import router as calls_router
-from backend.api.webhooks import router as webhooks_router
-from backend.api.clinical import router as clinical_router
-from backend.database.connection import engine, create_tables
+from config import settings
+from api.patients import router as patients_router
+from api.calls import router as calls_router
+from api.webhooks import router as webhooks_router
+from api.clinical import router as clinical_router
+from database.connection import engine, create_tables
 
 # Configure logging
 logging.basicConfig(

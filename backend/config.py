@@ -90,15 +90,10 @@ class Settings(BaseSettings):
         env_file = ".env"
         case_sensitive = True
     
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        
-        # Create upload directory if it doesn't exist
-        upload_path = Path(self.UPLOAD_DIR)
-        upload_path.mkdir(exist_ok=True)
-        
-        # Parse call schedule
-        self.CALL_SCHEDULE_DAYS = [
+    @property
+    def call_schedule_days(self) -> list[int]:
+        """Parse call schedule string into list of integers."""
+        return [
             int(day.strip()) 
             for day in self.DEFAULT_CALL_SCHEDULE.split(",")
         ]

@@ -1,41 +1,10 @@
 version: '3.8'
 
 services:
-  backend:
-    build: 
-      context: .
-      dockerfile: Dockerfile
-    ports:
-      - "8000:8000"
-    depends_on:
-      - db
-      - redis
-    environment:
-      - DATABASE_URL=postgresql://user:password@db:5432/tka_voice
-      - REDIS_URL=redis://redis:6379
-      - ENVIRONMENT=development
-    volumes:
-      - ./backend:/app/backend
-      - ./tests:/app/tests
-    command: uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
-
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    ports:
-      - "3000:3000"
-    depends_on:
-      - backend
-    volumes:
-      - ./frontend/src:/app/src
-      - ./frontend/public:/app/public
-    environment:
-      - REACT_APP_API_URL=http://localhost:8000
-      - CHOKIDAR_USEPOLLING=true
-
-  db:
+  # PostgreSQL Database
+  postgres:
     image: postgres:15-alpine
+    container_name: tka_postgres
     environment:
       POSTGRES_DB: tka_voice
       POSTGRES_USER: user
@@ -44,43 +13,88 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./scripts/init_db.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./docs/database_schema.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d tka_voice"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
 
+  # Redis Cache
   redis:
     image: redis:7-alpine
+    container_name: tka_redis
     ports:
       - "6379:6379"
     volumes:
       - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
 
-  celery_worker:
-    build: 
-      context: .
-      dockerfile: Dockerfile
+  # pgAdmin Database Administration
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: tka_pgadmin
     depends_on:
-      - db
-      - redis
+      - postgres
     environment:
-      - DATABASE_URL=postgresql://user:password@db:5432/tka_voice
-      - REDIS_URL=redis://redis:6379
+      PGADMIN_DEFAULT_EMAIL: admin@tka.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+    ports:
+      - "5050:80"
     volumes:
-      - ./backend:/app/backend
-    command: celery -A backend.tasks.celery_app worker --loglevel=info
+      - pgadmin_data:/var/lib/pgadmin
+    restart: unless-stopped
 
-  celery_beat:
-    build: 
-      context: .
+  # TKA Voice Agent Backend
+  backend:
+    build:
+      context: ./backend
       dockerfile: Dockerfile
+    container_name: tka_backend
     depends_on:
-      - db
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     environment:
-      - DATABASE_URL=postgresql://user:password@db:5432/tka_voice
-      - REDIS_URL=redis://redis:6379
+      DATABASE_URL: postgresql://user:password@postgres:5432/tka_voice
+      REDIS_URL: redis://redis:6379
+      ENVIRONMENT: development
+      DEBUG: true
+    ports:
+      - "8000:8000"
     volumes:
-      - ./backend:/app/backend
-    command: celery -A backend.tasks.celery_app beat --loglevel=info
+      - ./backend:/app
+      - ./uploads:/app/uploads
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    restart: unless-stopped
+
+  # TKA Voice Agent Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: tka_frontend
+    depends_on:
+      - backend
+    environment:
+      REACT_APP_API_URL: http://localhost:8000
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    command: npm start
+    restart: unless-stopped
 
 volumes:
   postgres_data:
-  redis_data: 
+  redis_data:
+  pgadmin_data: 
