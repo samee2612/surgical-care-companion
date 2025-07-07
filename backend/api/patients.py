@@ -5,13 +5,13 @@ Handles patient enrollment, retrieval, and management.
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from typing import List, Optional
+from typing import List, Optional, Union, Any
 from datetime import datetime, timedelta
 import uuid
 
 from database.connection import get_db
 from models import Patient, ClinicalStaff, CallSession
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 router = APIRouter()
 
@@ -25,7 +25,9 @@ class PatientCreate(BaseModel):
     surgery_type: str = "knee"
 
 class PatientResponse(BaseModel):
-    id: str
+    model_config = ConfigDict(from_attributes=True)
+    
+    id: Union[str, uuid.UUID]
     name: str
     primary_phone_number: str
     secondary_phone_number: Optional[str] = None
@@ -34,19 +36,15 @@ class PatientResponse(BaseModel):
     overall_compliance_score: float
     created_at: datetime
 
-    class Config:
-        from_attributes = True
-
 class CallSessionResponse(BaseModel):
-    id: str
+    model_config = ConfigDict(from_attributes=True)
+    
+    id: Union[str, uuid.UUID]
     call_type: str
     scheduled_date: datetime
     days_from_surgery: int
     call_status: str
     compliance_score: Optional[int] = None
-    
-    class Config:
-        from_attributes = True
 
 @router.post("/enroll", response_model=PatientResponse)
 async def enroll_patient(patient_data: PatientCreate, db: Session = Depends(get_db)):
