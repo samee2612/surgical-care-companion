@@ -74,10 +74,10 @@ async def enroll_patient(patient_data: PatientCreate, db: Session = Depends(get_
         # Auto-generate call schedule
         call_schedule = [
             (-42, "enrollment"),
-            (-28, "education"),
-            (-21, "education"),
-            (-14, "preparation"),
-            (-7, "preparation"),
+            (-28, "education"),  # Week 4
+            (-21, "education"),  # Week 3
+            (-14, "education"),  # Week 2
+            (-7, "education"),   # Week 1
             (-1, "final_prep")
         ]
         
