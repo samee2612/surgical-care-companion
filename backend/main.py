@@ -19,6 +19,7 @@ from api.patients import router as patients_router
 from api.calls import router as calls_router
 from api.webhooks import router as webhooks_router
 from api.clinical import router as clinical_router
+from api.voice_chat import router as voice_chat_router
 from database.connection import engine, create_tables
 
 # Configure logging
@@ -69,6 +70,12 @@ app.include_router(
     clinical_router,
     prefix=f"{settings.API_V1_STR}/clinical",
     tags=["clinical"]
+)
+
+app.include_router(
+    voice_chat_router,
+    prefix=f"{settings.API_V1_STR}/chat",
+    tags=["voice-chat"]
 )
 
 
