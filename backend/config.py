@@ -66,7 +66,7 @@ class Settings(BaseSettings):
     TWILIO_WEBHOOK_URL: str = ""
     
     # Email/SMS Notifications
-    SMTP_HOST: str = "smtp.gmail.com"
+    SMTP_SERVER: str = "smtp.gmail.com"  # Changed from SMTP_HOST to SMTP_SERVER
     SMTP_PORT: int = 587
     SMTP_USER: str = ""
     SMTP_PASSWORD: str = ""

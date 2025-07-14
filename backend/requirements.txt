@@ -21,6 +21,15 @@ python-multipart==0.0.12
 openai==1.54.4
 google-generativeai==0.8.3
 
+# Audio Processing and Speech Recognition
+openai-whisper==20240930
+torch==2.5.1
+torchaudio==2.5.1
+librosa==0.10.2
+soundfile==0.12.1
+pydub==0.25.1
+webrtcvad==2.0.10
+
 # Telephony
 twilio==9.3.7
 

@@ -1,11 +1,12 @@
 """
 Enhanced Voice Chat Service for TKA Patients
 Supports contextual conversations based on call types and patient data
+Integrates with ConversationManager for structured flows
 """
 
 import google.generativeai as genai
 import logging
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from datetime import datetime
 from config import settings
 
@@ -28,8 +29,50 @@ class TKAVoiceChat:
         self.model = genai.GenerativeModel("gemini-2.5-flash")
         logger.info("TKA Voice Chat initialized with contextual support")
     
+    async def generate_contextual_response(
+        self, 
+        user_message: str, 
+        system_prompt: str,
+        context_metadata: Dict[str, Any],
+        conversation_history: List[Dict[str, str]] = None
+    ) -> str:
+        """Generate contextual response using call context and conversation flow"""
+        
+        try:
+            # Build conversation history if provided
+            history_context = ""
+            if conversation_history:
+                history_context = "\n\nCONVERSATION HISTORY:\n"
+                for msg in conversation_history[-5:]:  # Last 5 messages for context
+                    role = msg.get('role', 'user')
+                    content = msg.get('content', '')
+                    history_context += f"{role.upper()}: {content}\n"
+            
+            # Build full prompt with context
+            full_prompt = f"""
+{system_prompt}
+
+CURRENT CONTEXT:
+- Call Type: {context_metadata.get('call_type', 'unknown')}
+- Days from Surgery: {context_metadata.get('days_from_surgery', 'unknown')}
+- Current Section: {context_metadata.get('current_section', 'unknown')}
+- Risk Level: {context_metadata.get('risk_level', 'low')}
+
+{history_context}
+
+PATIENT SAYS: "{user_message}"
+
+Your response (keep under 100 words, ask only ONE question at a time):"""
+            
+            response = self.model.generate_content(full_prompt)
+            return response.text.strip()
+            
+        except Exception as e:
+            logger.error(f"Error generating contextual response: {e}")
+            return "I apologize, but I'm having trouble processing that right now. Could you please repeat what you said?"
+    
     def get_patient_context(self, patient_id: str = "demo") -> str:
-        """Get patient context for conversation (legacy method)"""
+        """Get patient context for conversation (legacy method - kept for compatibility)"""
         return f"""
         Patient Information:
         - Name: John Smith (Demo Patient)
@@ -40,7 +83,7 @@ class TKAVoiceChat:
         """
     
     async def generate_response(self, user_message: str, patient_id: str = "demo") -> str:
-        """Generate contextual response for TKA patient (legacy method)"""
+        """Generate contextual response for TKA patient (legacy method - kept for compatibility)"""
         
         patient_context = self.get_patient_context(patient_id)
         

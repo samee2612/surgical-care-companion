@@ -10,6 +10,10 @@ from fastapi.responses import JSONResponse
 import logging
 import sys
 from pathlib import Path
+import warnings
+
+# Suppress PyTorch FutureWarning about pickle module
+warnings.filterwarnings("ignore", message="torch.load with weights_only=False")
 
 # Add the backend directory to Python path
 sys.path.append(str(Path(__file__).parent.parent))
@@ -20,6 +24,7 @@ from api.calls import router as calls_router
 from api.webhooks import router as webhooks_router
 from api.clinical import router as clinical_router
 from api.voice_chat import router as voice_chat_router
+from api.twilio_webhooks import router as twilio_router
 from database.connection import engine, create_tables
 
 # Configure logging
@@ -76,6 +81,12 @@ app.include_router(
     voice_chat_router,
     prefix=f"{settings.API_V1_STR}/chat",
     tags=["voice-chat"]
+)
+
+app.include_router(
+    twilio_router,
+    prefix=f"{settings.API_V1_STR}/twilio",
+    tags=["twilio-webhooks"]
 )
 
 

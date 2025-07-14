@@ -137,25 +137,14 @@ class CallContextService:
             "primary_phone": patient.primary_phone_number,
             "current_compliance_score": patient.overall_compliance_score,
             "readiness_status": patient.surgery_readiness_status,
-            "physician": patient.primary_physician.name if patient.primary_physician else "Unknown",
+            "physician": "Primary Physician",  # TODO: Implement proper physician lookup
             "call_history": self._get_previous_call_summary(patient)
         }
     
     def _get_previous_call_summary(self, patient: Patient) -> List[Dict[str, Any]]:
         """Get summary of previous calls for context"""
-        previous_calls = []
-        
-        for call in patient.call_sessions:
-            if call.call_status == "completed":
-                previous_calls.append({
-                    "call_type": call.call_type,
-                    "date": call.actual_call_start.isoformat() if call.actual_call_start else None,
-                    "outcome": call.call_outcome,
-                    "compliance_score": call.compliance_score,
-                    "concerns": call.concerns_identified or []
-                })
-        
-        return sorted(previous_calls, key=lambda x: x["date"] or "", reverse=True)
+        # TODO: Implement proper call history lookup from database
+        return []
     
     def _build_conversation_structure(self, call_type: CallType, days_from_surgery: int) -> Dict[str, Any]:
         """Build the conversation flow structure for this call type"""
@@ -265,13 +254,13 @@ class CallContextService:
         
         # Determine which week based on days from surgery
         if days_from_surgery == -28:
-            return self._build_week4_education()  # Surgery overview
+            return self._build_4weeks_before_education()  # Surgery overview
         elif days_from_surgery == -21:
-            return self._build_week3_education()  # Home preparation
+            return self._build_3weeks_before_education()  # Home preparation
         elif days_from_surgery == -14:
-            return self._build_week2_education()  # Pain management
+            return self._build_2weeks_before_education()  # Pain management
         elif days_from_surgery == -7:
-            return self._build_week1_education()  # Hospital stay
+            return self._build_1week_before_education()  # Hospital stay
         else:
             return {
                 "call_purpose": f"Educational call at {days_from_surgery} days from surgery",
@@ -279,11 +268,11 @@ class CallContextService:
                 "expected_outcomes": []
             }
     
-    def _build_week4_education(self) -> Dict[str, Any]:
-        """Week 4: Surgery overview and recovery expectations"""
+    def _build_4weeks_before_education(self) -> Dict[str, Any]:
+        """4 weeks before surgery: Surgery overview and recovery expectations"""
         return {
             "call_purpose": "Surgery overview and recovery expectations education",
-            "week": "Week 4",
+            "week": "4 weeks before surgery",
             "focus_topic": "Surgery Overview and Recovery Expectations",
             "tone": "informative_reassuring",
             "sections": [
@@ -301,15 +290,15 @@ class CallContextService:
             ]
         }
     
-    def _build_week3_education(self) -> Dict[str, Any]:
-        """Week 3: Home preparation requirements"""
+    def _build_3weeks_before_education(self) -> Dict[str, Any]:
+        """3 weeks before surgery: Home preparation requirements"""
         return {
             "call_purpose": "Home preparation requirements education",
-            "week": "Week 3", 
+            "week": "3 weeks before surgery", 
             "focus_topic": "Home Preparation Requirements",
             "tone": "practical_helpful",
             "sections": [
-                "progress_check_from_week4",
+                "progress_check_from_4weeks",
                 "home_safety_modifications",
                 "equipment_and_supplies_needed",
                 "accessibility_planning",
@@ -323,11 +312,11 @@ class CallContextService:
             ]
         }
     
-    def _build_week2_education(self) -> Dict[str, Any]:
-        """Week 2: Pain management planning"""
+    def _build_2weeks_before_education(self) -> Dict[str, Any]:
+        """2 weeks before surgery: Pain management planning"""
         return {
             "call_purpose": "Pain management planning education",
-            "week": "Week 2",
+            "week": "2 weeks before surgery",
             "focus_topic": "Pain Management Planning", 
             "tone": "educational_supportive",
             "sections": [
@@ -345,11 +334,11 @@ class CallContextService:
             ]
         }
     
-    def _build_week1_education(self) -> Dict[str, Any]:
-        """Week 1: Hospital stay and immediate post-op period"""
+    def _build_1week_before_education(self) -> Dict[str, Any]:
+        """1 week before surgery: Hospital stay and immediate post-op period"""
         return {
             "call_purpose": "Hospital stay and immediate post-op education",
-            "week": "Week 1",
+            "week": "1 week before surgery",
             "focus_topic": "Hospital Stay and Immediate Post-Op Period",
             "tone": "reassuring_detailed",
             "sections": [
@@ -365,4 +354,15 @@ class CallContextService:
                 "Post-op expectations realistic",
                 "Discharge plan confirmed"
             ]
-        } 
+        }
+
+
+# Factory function for dependency injection
+_call_context_service = None
+
+def get_call_context_service() -> CallContextService:
+    """Get or create CallContextService instance (singleton pattern)"""
+    global _call_context_service
+    if _call_context_service is None:
+        _call_context_service = CallContextService()
+    return _call_context_service

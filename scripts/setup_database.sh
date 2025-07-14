@@ -1,14 +1,15 @@
 #!/bin/bash
 
-# TKA Voice Agent Database Setup Script
-# This script sets up the database for both local and production environments
+# TKA Voice Agent - Complete Database Setup Script
+# This script initializes the PostgreSQL database with all required tables and data
 
-set -e  # Exit on any error
+set -e  # Exit on error
 
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Function to print colored output
@@ -24,6 +25,19 @@ print_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
+print_header() {
+    echo -e "${BLUE}[SETUP]${NC} $1"
+}
+
+print_header "🔧 Setting up TKA Voice Agent Database..."
+
+# Configuration
+DB_NAME="tka_voice"
+DB_USER="user"
+DB_PASSWORD="password"
+DB_HOST="localhost"
+DB_PORT="5432"
+
 # Check if we're in the right directory
 if [ ! -f "backend/main.py" ]; then
     print_error "Please run this script from the project root directory"
@@ -37,16 +51,16 @@ if ! command -v python3 &> /dev/null; then
 fi
 
 # Check if PostgreSQL is running
-print_status "Checking PostgreSQL connection..."
-if ! pg_isready -h localhost -p 5432 >/dev/null 2>&1; then
+print_status "📊 Checking PostgreSQL connection..."
+if ! pg_isready -h $DB_HOST -p $DB_PORT -U $DB_USER >/dev/null 2>&1; then
     print_warning "PostgreSQL is not running on localhost:5432"
     print_status "Starting PostgreSQL with Docker..."
-    docker-compose up -d postgres
+    docker-compose up -d postgres redis
     
     # Wait for PostgreSQL to be ready
     for i in {1..30}; do
-        if pg_isready -h localhost -p 5432 >/dev/null 2>&1; then
-            print_status "PostgreSQL is ready!"
+        if pg_isready -h $DB_HOST -p $DB_PORT -U $DB_USER >/dev/null 2>&1; then
+            print_status "✅ PostgreSQL is ready!"
             break
         fi
         if [ $i -eq 30 ]; then

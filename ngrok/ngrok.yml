@@ -1,0 +1,13 @@
+version: 2
+authtoken: 2ywRokOHWLYP4Jf2KeUYqcEFbwP_2kjHu9cTCgxiXXQokKUJw
+web_addr: 0.0.0.0:4040
+log_level: info
+log_format: json
+
+tunnels:
+  backend:
+    proto: http
+    addr: backend:8000
+    schemes:
+      - https
+    inspect: false

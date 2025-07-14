@@ -451,4 +451,15 @@ CRITICAL INSTRUCTIONS:
                 "escalation_needed": False,
                 "escalation_reasons": []
             }
-        } 
+        }
+
+
+# Factory function for dependency injection
+_context_injection_service = None
+
+def get_context_injection_service() -> ContextInjectionService:
+    """Get or create ContextInjectionService instance (singleton pattern)"""
+    global _context_injection_service
+    if _context_injection_service is None:
+        _context_injection_service = ContextInjectionService()
+    return _context_injection_service
