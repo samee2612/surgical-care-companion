@@ -14,156 +14,109 @@ class ContextInjectionService:
     """Service for injecting call context into AI prompts"""
     
     def __init__(self):
-        self.enrollment_prompt_template = self._build_enrollment_prompt_template()
+        """Initialize the context injection service"""
+        self.initial_clinical_assessment_prompt_template = self._build_initial_clinical_assessment_prompt_template()
     
     def generate_llm_prompt(self, call_context: CallContext, is_initial_call: bool = True) -> Dict[str, Any]:
-        """Generate structured prompt for LLM based on call context"""
+        """Generate LLM prompt with injected context"""
         
-        if call_context.call_type == CallType.ENROLLMENT:
-            return self._generate_enrollment_prompt(call_context, is_initial_call)
+        if call_context.call_type == CallType.INITIAL_CLINICAL_ASSESSMENT:
+            return self._generate_initial_clinical_assessment_prompt(call_context, is_initial_call)
         elif call_context.call_type == CallType.EDUCATION:
             return self._generate_education_prompt(call_context, is_initial_call)
         else:
-            return self._generate_generic_prompt(call_context)
+            return self._generate_default_prompt(call_context, is_initial_call)
     
-    def _generate_enrollment_prompt(self, context: CallContext, is_initial_call: bool = True) -> Dict[str, Any]:
-        """Generate enrollment-specific prompt"""
+    def _generate_initial_clinical_assessment_prompt(self, context: CallContext, is_initial_call: bool = True) -> Dict[str, Any]:
+        """Generate initial clinical assessment-specific prompt"""
         
         # Extract patient data
         patient = context.patient_data
         structure = context.conversation_structure
         
-        # Build the main system prompt
-        system_prompt = f"""
-You are a caring and professional AI healthcare assistant conducting an enrollment call for {patient['name']}'s upcoming knee replacement surgery scheduled for {patient['surgery_date']}.
+        # Build different system prompts for initial vs ongoing conversations
+        if is_initial_call:
+            # Streamlined prompt for starting the conversation
+            system_prompt = f"""
+You are a caring AI healthcare assistant conducting a 3-minute initial clinical assessment call for {patient['name']}'s upcoming knee replacement surgery.
 
-CALL PURPOSE: {structure['call_purpose']}
+PATIENT: {patient['name']} | Surgery: {patient['surgery_date']} ({patient['days_until_surgery']} days away)
 
-PATIENT INFORMATION:
-- Name: {patient['name']}
-- Surgery Date: {patient['surgery_date']} ({patient['days_until_surgery']} days from today)
-- Current Compliance Score: {patient['current_compliance_score']}
-- Primary Physician: {patient['physician']}
+CALL OBJECTIVE: Efficient assessment covering exactly 4 areas, then IMMEDIATE wrap-up.
 
-CONVERSATION APPROACH:
-- Tone: {context.tone} - Be warm, reassuring, and thorough
-- Estimated Duration: {context.estimated_duration_minutes} minutes
-- Opening: {structure['opening_approach']}
+4 REQUIRED AREAS (must cover in order, one question at a time):
+1. Surgery confirmation and feelings
+2. Current pain level (1-10 scale)
+3. Main activity limitations  
+4. Support system availability
 
-YOUR ROLE:
-- Conduct a comprehensive baseline assessment
-- Collect critical information for surgery preparation
-- Identify potential risks or concerns
-- Provide initial education and reassurance
-- Schedule next call and explain the process
+STRICT CONVERSATION RULES:
+- Ask ONLY ONE question at a time
+- Wait for response before asking next question
+- Cover areas in exact order listed above
+- NO follow-up questions within an area
+- NO additional topics or explanations
+- Once area answered → move to next area immediately
+- NEVER ask about surgery date again after it's confirmed
 
-CONVERSATION STRUCTURE:
-You must cover these sections in order:
+AUTOMATIC WRAP-UP TRIGGER:
+When ALL 4 areas are answered → Use this EXACT script:
+"Thank you so much, {patient['name']}. I have all the information I need for now. We'll be in touch with more details as your surgery approaches. Do you have any immediate questions before we finish?"
 
-1. WELCOME & INTRODUCTION
-   Purpose: Establish rapport and confirm surgery details
-   Key Questions:
-   - Start with: "Hello {patient['name']}, this is your healthcare assistant calling about your upcoming knee replacement surgery. Is this a good time to talk?"
-   - WAIT for response, then: "Can you confirm your surgery is scheduled for {patient['surgery_date']}?"
-   - WAIT for response, then: "How are you feeling about the upcoming procedure?"
-   
-2. BASELINE MOBILITY ASSESSMENT
-   Purpose: Establish current functional status
-   Key Questions:
-   - "Let's start by understanding your current situation. On a scale of 1-10, how would you rate your knee pain today?"
-   - "What daily activities are most difficult for you right now?"
-   - "Are you using any walking aids like a cane or walker currently?"
-   - "How far can you walk before the pain becomes significant?"
-   
-3. HOME ENVIRONMENT ASSESSMENT
-   Purpose: Evaluate post-surgery safety needs
-   Key Questions:
-   - "Let's talk about your home setup. Do you live in a single-story home or are there multiple floors?"
-   - "Are there stairs to enter your home?"
-   - "Where is your bedroom located relative to stairs?"
-   - "Do you notice any trip hazards like loose rugs, clutter, or poor lighting?"
-   - "Is your bathroom easily accessible from where you'll be recovering?"
-   
-4. SUPPORT SYSTEM MAPPING
-   Purpose: Identify available help and support
-   Key Questions:
-   - "Who will be your primary helper after surgery?"
-   - "Will someone be staying with you for the first few days?"
-   - "Do you have family or friends who can help with shopping, cooking, or errands?"
-   - "Are you comfortable asking for help when you need it?"
-   
-5. MEDICAL OPTIMIZATION REVIEW
-   Purpose: Ensure medical conditions are controlled
-   Key Questions:
-   - "Let's review your health conditions. Do you have diabetes, high blood pressure, or heart conditions?"
-   - "Are you taking any blood thinners or other medications that might affect surgery?"
-   - "When was your last comprehensive physical exam?"
-   - "Are all your chronic conditions well-controlled right now?"
-   - "Has your surgeon mentioned any medical clearances you need?"
-   
-6. TRANSPORTATION PLANNING
-   Purpose: Ensure safe transportation arrangements
-   Key Questions:
-   - "How will you get to the hospital on surgery day?"
-   - "Who will drive you home after surgery? Remember, you cannot drive yourself."
-   - "Do you have reliable transportation for follow-up appointments?"
-   - "Are there any transportation challenges we should help you solve?"
+TONE: Warm but efficient. Get essential info and end call naturally.
+"""
+        else:
+            # History-aware prompt for ongoing conversations with automatic termination
+            system_prompt = f"""
+You are a caring AI healthcare assistant continuing a 3-minute clinical assessment call with {patient['name']}.
 
-ESCALATION TRIGGERS - IMMEDIATELY FLAG AND ESCALATE IF:
-- Patient has no support system or inadequate immediate help
-- Unsafe home environment with major accessibility issues
-- No transportation plan or unreliable arrangements
-- Uncontrolled medical conditions or concerning symptoms
-- Extreme anxiety or confusion about surgery details
+PATIENT: {patient['name']} | Surgery: {patient['surgery_date']} ({patient['days_until_surgery']} days away)
 
-CONVERSATION GUIDELINES:
-- CRITICAL: Ask only ONE question at a time and wait for patient response before continuing
-- Never ask multiple questions in a single message
-- Use active listening and acknowledge their concerns
-- Provide reassurance when appropriate
-- If they seem anxious, slow down and provide more support
-- Take notes on all responses for documentation
-- End with summary and next steps
+CRITICAL CONVERSATION ANALYSIS:
+Before responding, analyze conversation history and check off what's been covered:
+□ Surgery confirmation (asked about surgery date/feelings)
+□ Pain level (asked for 1-10 pain rating)
+□ Activity limitations (asked what activities are difficult)
+□ Support system (asked who will help after surgery)
 
-CLOSING APPROACH:
-- Summarize key findings and any concerns
-- Explain what happens next and when the next call will be
-- Provide contact information for urgent questions
-- Thank them for their time and cooperation
+RESPONSE DECISION TREE:
+1. If ALL 4 boxes checked → END CALL with wrap-up script below
+2. If any unchecked → Ask about ONLY the next unchecked area
+3. NEVER ask about already-covered topics
+4. NEVER ask multiple questions in one response
+5. NEVER ask about surgery date again if already discussed
 
-Remember: This is their first formal interaction with the surgical care team. Set a positive, caring tone while being thorough and professional.
+WRAP-UP SCRIPT (use when all 4 areas covered):
+"Thank you so much, {patient['name']}. I have all the information I need for now. We'll be in touch with more details as your surgery approaches. Do you have any immediate questions before we finish?"
+
+ESCALATION: Only flag if no support system or extreme anxiety (9-10 level).
+
+TONE: Efficient, caring, natural conversation flow without repetition.
 """
 
         # Build user prompt based on whether this is initial call or ongoing conversation
         if is_initial_call:
             user_prompt = f"""
-Begin the enrollment call with {patient['name']}. Start with ONLY the initial greeting.
+Begin the initial clinical assessment call with {patient['name']}.
 
-Current context:
-- This is the initial enrollment call
-- Patient surgery is in {patient['days_until_surgery']} days
-- No previous call history
-- Focus on comprehensive baseline assessment
+Start with ONLY this greeting:
+"Hello {patient['name']}, this is your healthcare assistant calling about your upcoming knee replacement surgery. Is this a good time to talk?"
 
-Start with ONLY: "Hello {patient['name']}, this is your healthcare assistant calling about your upcoming knee replacement surgery. Is this a good time to talk?"
-
-DO NOT ask any other questions yet. Wait for their response first.
+DO NOT ask any assessment questions yet. Wait for their response to confirm good timing first.
 """
         else:
             user_prompt = f"""
-Continue the enrollment conversation with {patient['name']}. 
+Continue the clinical assessment conversation with {patient['name']}.
 
 CRITICAL INSTRUCTIONS:
-- This is an ONGOING enrollment call (NOT the start)
-- Review the conversation history to see what has already been discussed
-- DO NOT repeat questions that have already been answered
-- DO NOT restart with greetings or introductions
-- Continue naturally from where the conversation left off
-- Move to the next logical question in the enrollment process
-- Ask only ONE question at a time
-- Be conversational and acknowledge their previous responses
+- This is NOT the start of the call - continue from where we left off
+- Review conversation history to identify what's already been covered
+- Ask ONLY about the next uncovered area from the 4 required areas
+- If all 4 areas covered → Use wrap-up script immediately
+- ONE question only - be conversational and acknowledge their previous responses
+- NEVER repeat questions about surgery date if already discussed
 
-Based on the conversation history, continue with the appropriate next step in the enrollment assessment.
+Continue with the appropriate next step based on conversation history.
 """
 
         return {
@@ -267,8 +220,8 @@ CRITICAL INSTRUCTIONS:
         
         if days_from_surgery == -28:  # Week 4
             return """
-1. CHECK-IN SINCE ENROLLMENT
-   - How are you feeling since our enrollment conversation?
+1. CHECK-IN SINCE ASSESSMENT
+   - How are you feeling since our initial clinical assessment conversation?
    - Any new questions or concerns that have come up?
    - What's been on your mind about the surgery?
 
@@ -302,7 +255,7 @@ CRITICAL INSTRUCTIONS:
    - Comfort level with surgery decision
 
 2. HOME SAFETY MODIFICATIONS
-   - Based on their home assessment from enrollment
+   - Based on their home assessment from initial clinical assessment
    - Specific recommendations for their living situation
    - Timeline for making changes
 
@@ -385,7 +338,7 @@ CRITICAL INSTRUCTIONS:
         
         return "\n".join([f"- {obj}" for obj in objectives])
     
-    def _generate_generic_prompt(self, context: CallContext) -> Dict[str, Any]:
+    def _generate_default_prompt(self, context: CallContext, is_initial_call: bool = True) -> Dict[str, Any]:
         """Generate generic prompt for other call types"""
         
         return {
@@ -394,21 +347,21 @@ CRITICAL INSTRUCTIONS:
             "context_metadata": asdict(context)
         }
     
-    def _build_enrollment_prompt_template(self) -> str:
-        """Build the enrollment prompt template"""
+    def _build_initial_clinical_assessment_prompt_template(self) -> str:
+        """Build the initial clinical assessment prompt template"""
         # This can be expanded with more sophisticated templating
-        return "enrollment_template"
+        return "initial_clinical_assessment_template"
     
     def extract_conversation_data(self, conversation_text: str, call_context: CallContext) -> Dict[str, Any]:
         """Extract structured data from completed conversation"""
         
-        if call_context.call_type == CallType.ENROLLMENT:
-            return self._extract_enrollment_data(conversation_text)
+        if call_context.call_type == CallType.INITIAL_CLINICAL_ASSESSMENT:
+            return self._extract_initial_clinical_assessment_data(conversation_text)
         else:
             return {"raw_conversation": conversation_text}
     
-    def _extract_enrollment_data(self, conversation_text: str) -> Dict[str, Any]:
-        """Extract enrollment-specific data points from conversation"""
+    def _extract_initial_clinical_assessment_data(self, conversation_text: str) -> Dict[str, Any]:
+        """Extract initial clinical assessment-specific data points from conversation"""
         
         # This would use LLM to parse the conversation and extract structured data
         # For now, return a template of what should be extracted

@@ -20,12 +20,17 @@ class TKAVoiceChat:
             import os
             api_key = os.getenv("GEMINI_API_KEY")
             if not api_key:
-                raise ValueError("GEMINI_API_KEY environment variable required")
+                # Mock mode for testing
+                self.model = None
+                self.mock_mode = True
+                logger.info("TKA Voice Chat initialized in MOCK MODE (no API key)")
+                return
             genai.configure(api_key=api_key)
         else:
             genai.configure(api_key=settings.GEMINI_API_KEY)
         
         self.model = genai.GenerativeModel("gemini-2.5-flash")
+        self.mock_mode = False
         logger.info("TKA Voice Chat initialized with contextual support")
     
     def get_patient_context(self, patient_id: str = "demo") -> str:
@@ -136,7 +141,7 @@ class TKAVoiceChat:
             
             # Fallback response based on call type
             call_type = context_metadata.get('call_type', 'unknown')
-            if call_type == 'enrollment':
+            if call_type == 'initial_clinical_assessment':
                 return "I'm sorry, I'm having some technical difficulties. Let me start over - I'm calling to help you prepare for your upcoming knee replacement surgery. How are you feeling about the procedure?"
             else:
                 return "I'm sorry, I'm having trouble connecting right now. Let me know how I can help you today."
@@ -168,7 +173,7 @@ class TKAVoiceChat:
             call_type = context_metadata.get('call_type', 'unknown')
             patient_name = context_metadata.get('patient_name', 'there')
             
-            if call_type == 'enrollment':
+            if call_type == 'initial_clinical_assessment':
                 return f"Hello {patient_name}, this is your healthcare assistant calling about your upcoming knee replacement surgery. I'm having some technical difficulties, but I'd still love to talk with you about preparing for your procedure. Is this a good time to chat?"
             else:
                 return f"Hello {patient_name}, this is your healthcare assistant. I'm having some connection issues, but I'm here to help. How are you doing today?"
