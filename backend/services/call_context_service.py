@@ -15,10 +15,11 @@ from models.call_session import CallSession
 
 class CallType(Enum):
     """Enum for different call types"""
-    ENROLLMENT = "enrollment"
+    INITIAL_CLINICAL_ASSESSMENT = "initial_clinical_assessment"
     EDUCATION = "education"
     PREPARATION = "preparation"
     FINAL_PREP = "final_prep"
+    FINAL_LOGISTICS = "final_logistics"
 
 
 @dataclass
@@ -53,22 +54,17 @@ class CallContextService:
     def _initialize_call_definitions(self) -> Dict[CallType, Dict[str, Any]]:
         """Initialize call type definitions"""
         return {
-            CallType.ENROLLMENT: {
-                "days_from_surgery": -42,
-                "duration_minutes": 20,
+            CallType.INITIAL_CLINICAL_ASSESSMENT: {
+                "days_from_surgery": -35,  # 5 weeks pre-op (4-6 weeks range)
+                "duration_minutes": 3,
                 "primary_focus": "baseline_assessment",
                 "secondary_focus": "information_collection",
-                "tone": "comprehensive_welcoming",
+                "tone": "efficient_caring",
                 "sections": [
-                    "welcome_introduction",
                     "surgery_confirmation",
-                    "baseline_mobility_assessment",
-                    "pain_level_evaluation",
-                    "home_environment_assessment",
-                    "support_system_mapping",
-                    "medical_optimization_review",
-                    "transportation_planning",
-                    "next_steps_overview"
+                    "pain_assessment",
+                    "activity_limitations",
+                    "support_system"
                 ],
                 "escalation_triggers": [
                     "no_support_system",
@@ -137,41 +133,31 @@ class CallContextService:
             "primary_phone": patient.primary_phone_number,
             "current_compliance_score": patient.overall_compliance_score,
             "readiness_status": patient.surgery_readiness_status,
-            "physician": patient.primary_physician.name if patient.primary_physician else "Unknown",
+            "physician": str(patient.primary_physician_id) if patient.primary_physician_id else "Unknown",
             "call_history": self._get_previous_call_summary(patient)
         }
     
     def _get_previous_call_summary(self, patient: Patient) -> List[Dict[str, Any]]:
         """Get summary of previous calls for context"""
-        previous_calls = []
-        
-        for call in patient.call_sessions:
-            if call.call_status == "completed":
-                previous_calls.append({
-                    "call_type": call.call_type,
-                    "date": call.actual_call_start.isoformat() if call.actual_call_start else None,
-                    "outcome": call.call_outcome,
-                    "compliance_score": call.compliance_score,
-                    "concerns": call.concerns_identified or []
-                })
-        
-        return sorted(previous_calls, key=lambda x: x["date"] or "", reverse=True)
+        # For now, return empty list since Patient model doesn't have call_sessions relationship
+        # In production, this would query the database for call sessions by patient_id
+        return []
     
     def _build_conversation_structure(self, call_type: CallType, days_from_surgery: int) -> Dict[str, Any]:
         """Build the conversation flow structure for this call type"""
         
-        if call_type == CallType.ENROLLMENT:
-            return self._build_enrollment_structure()
+        if call_type == CallType.INITIAL_CLINICAL_ASSESSMENT:
+            return self._build_initial_clinical_assessment_structure()
         elif call_type == CallType.EDUCATION:
             return self._build_education_structure(days_from_surgery)
         else:
             return {"sections": [], "flow": "standard"}
     
-    def _build_enrollment_structure(self) -> Dict[str, Any]:
-        """Build conversation structure for enrollment call (-42 days)"""
+    def _build_initial_clinical_assessment_structure(self) -> Dict[str, Any]:
+        """Build conversation structure for initial clinical assessment call (4-6 weeks pre-op)"""
         
         return {
-            "call_purpose": "Comprehensive baseline assessment and information collection",
+            "call_purpose": "Comprehensive baseline assessment and information collection for upcoming surgery",
             "opening_approach": "warm_welcome_with_surgery_confirmation",
             "sections": [
                 ConversationSection(
@@ -197,19 +183,7 @@ class CallContextService:
                     required_data=["pain_level", "mobility_limitations", "current_aids", "walking_distance"],
                     escalation_criteria=["severe_disability", "concerning_symptoms"]
                 ),
-                ConversationSection(
-                    name="home_environment_assessment",
-                    purpose="Evaluate post-surgery safety and preparation needs",
-                    key_questions=[
-                        "Do you live in a single-story home or multi-story?",
-                        "Are there stairs to enter your home?",
-                        "Where is your bedroom located?",
-                        "Do you have any trip hazards like loose rugs or clutter?",
-                        "Is your bathroom easily accessible?"
-                    ],
-                    required_data=["home_layout", "stairs_present", "bedroom_location", "safety_hazards", "bathroom_access"],
-                    escalation_criteria=["unsafe_environment", "major_accessibility_issues"]
-                ),
+                
                 ConversationSection(
                     name="support_system_mapping",
                     purpose="Identify available help and support",
@@ -221,40 +195,15 @@ class CallContextService:
                     ],
                     required_data=["primary_caregiver", "overnight_support", "errand_assistance", "comfort_asking_help"],
                     escalation_criteria=["no_support_system", "inadequate_immediate_help"]
-                ),
-                ConversationSection(
-                    name="medical_optimization_review",
-                    purpose="Ensure medical conditions are well-controlled",
-                    key_questions=[
-                        "Do you have diabetes, high blood pressure, or heart conditions?",
-                        "Are you taking any blood thinners?",
-                        "When was your last physical exam?",
-                        "Are all your chronic conditions well-controlled?",
-                        "Do you need any medical clearances?"
-                    ],
-                    required_data=["chronic_conditions", "medications", "recent_exam", "condition_control", "clearances_needed"],
-                    escalation_criteria=["uncontrolled_conditions", "medication_concerns", "missing_clearances"]
-                ),
-                ConversationSection(
-                    name="transportation_planning",
-                    purpose="Ensure safe transportation arrangements",
-                    key_questions=[
-                        "How will you get to the hospital for surgery?",
-                        "Who will drive you home after surgery?",
-                        "Do you have transportation for follow-up appointments?",
-                        "Are there any transportation challenges we should know about?"
-                    ],
-                    required_data=["surgery_transport", "discharge_transport", "followup_transport", "transport_challenges"],
-                    escalation_criteria=["no_transport_plan", "unreliable_arrangements"]
                 )
+                
+                
             ],
             "closing_approach": "summary_and_next_steps",
             "expected_outcomes": [
                 "Baseline assessment completed",
                 "Support system mapped",
-                "Home safety evaluation done",
-                "Medical optimization status known",
-                "Transportation plan confirmed",
+                
                 "Patient anxiety level assessed",
                 "Next call scheduled and explained"
             ]
@@ -287,7 +236,7 @@ class CallContextService:
             "focus_topic": "Surgery Overview and Recovery Expectations",
             "tone": "informative_reassuring",
             "sections": [
-                "check_in_since_enrollment",
+                "check_in_since_assessment",
                 "surgery_procedure_overview", 
                 "recovery_timeline_expectations",
                 "address_surgery_concerns",

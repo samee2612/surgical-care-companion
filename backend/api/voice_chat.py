@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from typing import Optional
 from datetime import datetime
+import json
 
 from database.connection import get_db
 from models.patient import Patient
@@ -22,12 +23,11 @@ class ContextualChatMessage(BaseModel):
     message: str
     patient_id: str
     call_session_id: str
-    conversation_history: Optional[list] = []
+    # Removed conversation_history - now handled automatically by backend
 
 class ChatResponse(BaseModel):
     response: str
-    status: str = "success"
-    context_metadata: Optional[dict] = None
+    context_metadata: dict
 
 class StartCallRequest(BaseModel):
     patient_id: str
@@ -36,7 +36,6 @@ class StartCallRequest(BaseModel):
 class StartCallResponse(BaseModel):
     initial_message: str
     call_context: dict
-    status: str = "success"
 
 # Initialize context services
 context_service = CallContextService()
@@ -44,7 +43,7 @@ injection_service = ContextInjectionService()
 
 @router.post("/contextual-chat", response_model=ChatResponse)
 async def contextual_chat(chat_msg: ContextualChatMessage, db: Session = Depends(get_db)):
-    """Context-aware chat using call session information"""
+    """Context-aware chat using call session information with automatic conversation history"""
     try:
         # Get patient and call session
         patient = db.query(Patient).filter(Patient.id == chat_msg.patient_id).first()
@@ -54,6 +53,15 @@ async def contextual_chat(chat_msg: ContextualChatMessage, db: Session = Depends
         call_session = db.query(CallSession).filter(CallSession.id == chat_msg.call_session_id).first()
         if not call_session:
             raise HTTPException(status_code=404, detail="Call session not found")
+        
+        # Load conversation history from database (or start new)
+        if call_session.conversation_history:
+            history = json.loads(call_session.conversation_history)
+        else:
+            history = []
+        
+        # Append the new user message
+        history.append({"role": "user", "content": chat_msg.message})
         
         # Generate call context
         call_context = context_service.get_call_context(patient, call_session)
@@ -67,8 +75,15 @@ async def contextual_chat(chat_msg: ContextualChatMessage, db: Session = Depends
             user_message=chat_msg.message,
             system_prompt=prompt_data["system_prompt"],
             context_metadata=prompt_data["context_metadata"],
-            conversation_history=chat_msg.conversation_history
+            conversation_history=history
         )
+        
+        # Append the assistant's response to history
+        history.append({"role": "assistant", "content": response})
+        
+        # Save updated history back to database
+        call_session.conversation_history = json.dumps(history)
+        db.commit()
         
         return ChatResponse(
             response=response,
@@ -107,11 +122,13 @@ async def start_call(request: StartCallRequest, db: Session = Depends(get_db)):
             context_metadata=prompt_data["context_metadata"]
         )
         
+        # Initialize conversation history with the first assistant message
+        history = [{"role": "assistant", "content": initial_response}]
+        call_session.conversation_history = json.dumps(history)
+        
         # Update call session status
-        db.query(CallSession).filter(CallSession.id == request.call_session_id).update({
-            "call_status": "in_progress",
-            "actual_call_start": datetime.now()
-        })
+        call_session.call_status = "in_progress"
+        call_session.actual_call_start = datetime.now()
         db.commit()
         
         return StartCallResponse(
