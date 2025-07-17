@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Search, MoreHorizontal } from "lucide-react";
+import { Search, MoreHorizontal, Phone, Eye } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -33,7 +33,30 @@ interface Patient {
   mrn: string;
   firstName: string;
   lastName: string;
+  dateOfBirth: string;
+  phone?: string;
+  email?: string;
   programActive: boolean;
+  enrollmentDate: string;
+  // Related data that might come from joins
+  surgeries?: Array<{
+    id: number;
+    procedure: string;
+    surgeonName: string;
+    surgeryDate: string;
+    specialty: string;
+  }>;
+  alerts?: Array<{
+    id: number;
+    priority: string;
+    status: string;
+  }>;
+  voiceInteractions?: Array<{
+    id: number;
+    callDate: string;
+    riskScore: string;
+    status: string;
+  }>;
 }
 
 export function PatientTable() {
@@ -50,26 +73,71 @@ export function PatientTable() {
   };
 
   const getRiskScoreColor = (score: number) => {
-    if (score >= 80) return "bg-red-100 text-red-800";
-    if (score >= 60) return "bg-yellow-100 text-yellow-800";
+    if (score >= 7) return "bg-red-100 text-red-800";
+    if (score >= 4) return "bg-yellow-100 text-yellow-800";
     return "bg-green-100 text-green-800";
   };
 
   const getRiskLevel = (score: number) => {
-    if (score >= 80) return "High";
-    if (score >= 60) return "Medium";
+    if (score >= 7) return "High";
+    if (score >= 4) return "Medium";
     return "Low";
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "alert":
-        return "bg-red-100 text-red-800";
-      case "monitor":
-        return "bg-yellow-100 text-yellow-800";
-      default:
-        return "bg-green-100 text-green-800";
+  const getStatusColor = (active: boolean, hasAlerts?: boolean) => {
+    if (!active) return "bg-gray-100 text-gray-800";
+    if (hasAlerts) return "bg-red-100 text-red-800";
+    return "bg-green-100 text-green-800";
+  };
+
+  const getStatusText = (active: boolean, hasAlerts?: boolean) => {
+    if (!active) return "Inactive";
+    if (hasAlerts) return "Alert";
+    return "Active";
+  };
+
+  const calculateAge = (dateOfBirth: string) => {
+    const today = new Date();
+    const birthDate = new Date(dateOfBirth);
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const monthDiff = today.getMonth() - birthDate.getMonth();
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+      age--;
     }
+    return age;
+  };
+
+  const getPostOpDay = (surgeryDate?: string) => {
+    if (!surgeryDate) return "N/A";
+    const today = new Date();
+    const surgery = new Date(surgeryDate);
+    const diffTime = Math.abs(today.getTime() - surgery.getTime());
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return `Day ${diffDays}`;
+  };
+
+  const getLatestRiskScore = (interactions?: Patient['voiceInteractions']) => {
+    if (!interactions || interactions.length === 0) return null;
+    const latest = interactions.sort((a, b) => 
+      new Date(b.callDate).getTime() - new Date(a.callDate).getTime()
+    )[0];
+    return parseFloat(latest.riskScore);
+  };
+
+  const getLastContact = (interactions?: Patient['voiceInteractions']) => {
+    if (!interactions || interactions.length === 0) return "No contact";
+    const latest = interactions.sort((a, b) => 
+      new Date(b.callDate).getTime() - new Date(a.callDate).getTime()
+    )[0];
+    
+    const contactDate = new Date(latest.callDate);
+    const now = new Date();
+    const diffHours = Math.floor((now.getTime() - contactDate.getTime()) / (1000 * 60 * 60));
+    
+    if (diffHours < 1) return "Just now";
+    if (diffHours < 24) return `${diffHours}h ago`;
+    const diffDays = Math.floor(diffHours / 24);
+    return `${diffDays}d ago`;
   };
 
   if (isLoading) {
@@ -147,70 +215,97 @@ export function PatientTable() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {patients.length === 0 ? (
+            {(patients as Patient[]).length === 0 ? (
               <TableRow>
                 <TableCell colSpan={7} className="text-center py-8 text-gray-500">
                   No patients found
                 </TableCell>
               </TableRow>
             ) : (
-              patients.map((patient: Patient) => (
-                <TableRow key={patient.id} className="hover:bg-gray-50">
-                  <TableCell>
-                    <div className="flex items-center space-x-3">
-                      <Avatar>
-                        <AvatarFallback className="bg-medical-blue bg-opacity-10 text-medical-blue">
-                          {getInitials(patient.firstName, patient.lastName)}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div>
-                        <div className="font-medium text-gray-900">
-                          {patient.firstName} {patient.lastName}
+              (patients as Patient[]).map((patient: Patient) => {
+                const latestRiskScore = getLatestRiskScore(patient.voiceInteractions);
+                const hasActiveAlerts = patient.alerts?.some(alert => alert.status === 'active');
+                const latestSurgery = patient.surgeries?.[0];
+                
+                return (
+                  <TableRow key={patient.id} className="hover:bg-gray-50">
+                    <TableCell>
+                      <div className="flex items-center space-x-3">
+                        <Avatar>
+                          <AvatarFallback className="bg-medical-blue bg-opacity-10 text-medical-blue">
+                            {getInitials(patient.firstName, patient.lastName)}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div>
+                          <div className="font-medium text-gray-900">
+                            {patient.firstName} {patient.lastName}
+                          </div>
+                          <div className="text-sm text-gray-500">
+                            MRN: {patient.mrn} • Age: {calculateAge(patient.dateOfBirth)}
+                          </div>
                         </div>
-                        <div className="text-sm text-gray-500">MRN: {patient.mrn}</div>
                       </div>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div>
-                      <div className="text-sm text-gray-900">Hip Replacement</div>
-                      <div className="text-sm text-gray-500">Dr. Anderson</div>
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-sm text-gray-900">Day 3</TableCell>
-                  <TableCell>
-                    <Badge className={getRiskScoreColor(87)}>
-                      87 - {getRiskLevel(87)}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-sm text-gray-500">2 mins ago</TableCell>
-                  <TableCell>
-                    <Badge className={getStatusColor("alert")}>Alert</Badge>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center space-x-2">
-                      <Button variant="link" size="sm" className="text-medical-blue">
-                        View
-                      </Button>
-                      <Button variant="link" size="sm" className="text-medical-blue">
-                        Call
-                      </Button>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="sm">
-                            <MoreHorizontal className="h-4 w-4" />
+                    </TableCell>
+                    <TableCell>
+                      <div>
+                        <div className="text-sm text-gray-900">
+                          {latestSurgery?.procedure || "No surgery recorded"}
+                        </div>
+                        <div className="text-sm text-gray-500">
+                          {latestSurgery?.surgeonName || "N/A"}
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-sm text-gray-900">
+                      {getPostOpDay(latestSurgery?.surgeryDate)}
+                    </TableCell>
+                    <TableCell>
+                      {latestRiskScore !== null ? (
+                        <Badge className={getRiskScoreColor(latestRiskScore)}>
+                          {latestRiskScore.toFixed(1)} - {getRiskLevel(latestRiskScore)}
+                        </Badge>
+                      ) : (
+                        <span className="text-sm text-gray-500">No data</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-sm text-gray-500">
+                      {getLastContact(patient.voiceInteractions)}
+                    </TableCell>
+                    <TableCell>
+                      <Badge className={getStatusColor(patient.programActive, hasActiveAlerts)}>
+                        {getStatusText(patient.programActive, hasActiveAlerts)}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center space-x-2">
+                        <Button variant="ghost" size="sm" className="text-medical-blue hover:text-medical-blue-dark">
+                          <Eye className="h-4 w-4 mr-1" />
+                          View
+                        </Button>
+                        {patient.phone && (
+                          <Button variant="ghost" size="sm" className="text-medical-blue hover:text-medical-blue-dark">
+                            <Phone className="h-4 w-4 mr-1" />
+                            Call
                           </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent>
-                          <DropdownMenuItem>Edit Profile</DropdownMenuItem>
-                          <DropdownMenuItem>View History</DropdownMenuItem>
-                          <DropdownMenuItem>Send Message</DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))
+                        )}
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="sm">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent>
+                            <DropdownMenuItem>Edit Profile</DropdownMenuItem>
+                            <DropdownMenuItem>View History</DropdownMenuItem>
+                            <DropdownMenuItem>Send Message</DropdownMenuItem>
+                            <DropdownMenuItem>Add Surgery</DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })
             )}
           </TableBody>
         </Table>
@@ -220,8 +315,8 @@ export function PatientTable() {
           <div className="flex items-center justify-between">
             <div className="text-sm text-gray-700">
               Showing <span className="font-medium">1</span> to{" "}
-              <span className="font-medium">10</span> of{" "}
-              <span className="font-medium">{patients.length}</span> patients
+              <span className="font-medium">{Math.min(10, (patients as Patient[]).length)}</span> of{" "}
+              <span className="font-medium">{(patients as Patient[]).length}</span> patients
             </div>
             <div className="flex items-center space-x-2">
               <Button variant="outline" size="sm">

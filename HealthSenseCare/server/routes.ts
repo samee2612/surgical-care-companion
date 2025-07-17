@@ -122,18 +122,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/patients', isAuthenticated, async (req, res) => {
+  app.post('/api/patients', authMiddleware, async (req, res) => {
     try {
       const patientData = insertPatientSchema.parse(req.body);
       const patient = await storage.createPatient(patientData);
       res.status(201).json(patient);
     } catch (error) {
       console.error("Error creating patient:", error);
-      res.status(400).json({ message: "Invalid patient data" });
+      if (error instanceof Error) {
+        res.status(400).json({ message: error.message });
+      } else {
+        res.status(400).json({ message: "Invalid patient data" });
+      }
     }
   });
 
-  app.put('/api/patients/:id', isAuthenticated, async (req, res) => {
+  app.put('/api/patients/:id', authMiddleware, async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const updateData = insertPatientSchema.partial().parse(req.body);
@@ -146,7 +150,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Surgery routes
-  app.get('/api/patients/:id/surgeries', isAuthenticated, async (req, res) => {
+  app.get('/api/patients/:id/surgeries', authMiddleware, async (req, res) => {
     try {
       const patientId = parseInt(req.params.id);
       const surgeries = await storage.getSurgeriesForPatient(patientId);
