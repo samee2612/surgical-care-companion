@@ -1,0 +1,28 @@
+Create a secure, professional, and scalable web application for Healthsense24 Surgical Care Voice Agent System, designed to support both surgical care teams and patients through a voice-enabled platform. The web interface should reflect modern healthcare design standards, emphasizing clarity, trust, accessibility, and clinical-grade functionality. It must include user authentication, dashboards for providers and patients, integration interfaces, educational content, and administrative tools.
+
+1. Authentication & User Roles Page
+Build a secure login and user management interface with role-based access control. Three primary user roles must be supported: Providers (e.g., surgeons, nurses, coordinators), Administrators (e.g., system admins, billing personnel), and Patients enrolled in recovery programs. The login process should support two-factor authentication (2FA), password reset workflows, email/account verification, and an audit trail for tracking login activity and access to sensitive patient data. Ensure a HIPAA-compliant authentication framework.
+
+2. Provider Dashboard
+This central workspace is designed for healthcare teams to manage and monitor post-surgical patients. It should feature a real-time alerts panel to highlight patients flagged by the voice agent for elevated risk, and a searchable, filterable patient list view categorized by procedure type, risk score, or recovery phase. Include an analytics dashboard with key metrics like 30-day readmission rates, time to complication detection, enrollment rates, and ED visit trends. The dashboard should also include tools for managing alerts (e.g., escalate, resolve), reviewing AI-generated voice conversation summaries, and annotated transcripts showing potential clinical concerns detected by the system.
+
+3. Patient Dashboard
+Design a user-friendly recovery portal for patients undergoing surgery. Patients should see summaries of their daily voice check-ins, including interpreted symptoms and care recommendations. Include a section for upcoming scheduled voice calls, a pre-operative checklist with interactive content (videos, infographics, documents), and post-operative guidance, such as wound care instructions and mobility recommendations. Add a symptom tracking summary, where patients can review what the system has detected over time, and a secure messaging option to reach their care team with questions or concerns.
+
+4. Knowledge Base
+This section acts as a shared learning center for both hospitals and patients. For hospital staff, include searchable content such as clinical guidelines per surgical specialty, technical documentation on integrating with EHR systems or billing, and explanations of AI-driven risk scoring models. For patients, provide clear, multimedia educational modules specific to their surgery type, frequently asked questions about the voice agent and privacy, and instructions on how to respond during voice check-ins. Ensure all content is accessible, written at a 6th–8th grade reading level, and available in multiple languages.
+
+5. Voice Agent Testing Interface
+Provide an interactive sandbox environment for clinicians and developers to simulate voice agent behavior. Users should be able to initiate mock calls using various predefined patient profiles, inject synthetic symptoms to test detection logic, and review voice-to-text transcriptions along with AI interpretations. Add tools to evaluate whether the system appropriately decides between escalation or reassurance based on patient input. This environment should support clinical validation and development testing.
+
+6. Voice Interaction Reports
+Create a dedicated page for viewing and exporting reports from all automated voice calls. Each entry should include a timestamped transcript, symptom analysis, AI-assigned risk score, and escalation triggers with clinical reasoning. Reports should be downloadable as PDFs for integration into the EHR or for compliance and audit purposes. Include filters by patient, date range, and risk level.
+
+7. Twilio Voice Integration Panel
+This section enables technical teams to configure and manage the voice backend, powered by Twilio. Include settings for call routing (e.g., IVRs, number pools), live monitoring of call completion and quality, a real-time status dashboard for queued, active, and completed calls, and error logging tools to track call failures, dropped lines, or no-responses. Provide a secure method to test or override routing logic for support purposes.
+
+8. Patient Profile Pages
+Each patient should have a comprehensive profile view for providers. This includes demographics, procedure details, and a history of voice interactions. Highlight an alerts timeline, risk stratification scorecard, and record of consent and enrollment status. Also include a notes section where the care team can log interventions or observations. Ensure that all patient data is presented in an easy-to-navigate, structured layout that supports clinical decision-making.
+
+9. System Settings & Admin Tools
+Provide a back-office interface for system administrators. Include options to manage user accounts, define access levels, and configure custom alert thresholds for different surgeries or patient types. Admins should be able to upload procedure-specific educational content, monitor system uptime and performance, and manage billing configuration including support for CPT codes related to Remote Patient Monitoring (RPM) and Remote Therapeutic Monitoring (RTM). Include logs for system actions, user changes, and data import/export.
