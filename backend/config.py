@@ -8,7 +8,10 @@ from pydantic_settings import BaseSettings
 from typing import List, Optional
 import os
 from pathlib import Path
+from dotenv import load_dotenv
 
+# Load environment variables from .env file
+load_dotenv()
 
 class Settings(BaseSettings):
     """Application settings."""

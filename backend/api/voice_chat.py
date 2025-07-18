@@ -12,7 +12,7 @@ import json
 
 from database.connection import get_db
 from models.patient import Patient
-from models.call_session import CallSession
+from models import VoiceInteraction as CallSession
 from services.voice_chat import get_chat_service
 from services.call_context_service import CallContextService
 from services.context_injection_service import ContextInjectionService

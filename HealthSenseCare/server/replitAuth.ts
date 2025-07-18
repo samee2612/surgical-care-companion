@@ -8,7 +8,7 @@ import memoize from "memoizee";
 import connectPg from "connect-pg-simple";
 import { storage } from "./storage";
 
-if (!process.env.REPLIT_DOMAINS) {
+if (!process.env.REPLIT_DOMAINS && process.env.NODE_ENV !== 'development') {
   throw new Error("Environment variable REPLIT_DOMAINS not provided");
 }
 
@@ -72,6 +72,12 @@ export async function setupAuth(app: Express) {
   app.use(passport.initialize());
   app.use(passport.session());
 
+  // Skip OAuth setup in development mode
+  if (process.env.NODE_ENV === 'development') {
+    console.log('Skipping OAuth setup in development mode');
+    return;
+  }
+
   const config = await getOidcConfig();
 
   const verify: VerifyFunction = async (
@@ -128,12 +134,16 @@ export async function setupAuth(app: Express) {
 }
 
 export const isAuthenticated: RequestHandler = async (req, res, next) => {
-  // Bypass authentication in development mode
-  if (process.env.DISABLE_AUTH === 'true') {
+  // Skip authentication in development mode
+  if (process.env.NODE_ENV === 'development') {
+    // Mock user for development
     req.user = {
-      id: 'dev-user-123',
-      email: 'dev@example.com',
-      name: 'Dev User'
+      claims: {
+        sub: 'dev-user-123',
+        email: 'dev@example.com',
+        first_name: 'Dev',
+        last_name: 'User'
+      }
     };
     return next();
   }

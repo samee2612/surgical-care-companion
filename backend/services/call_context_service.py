@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from enum import Enum
 
 from models.patient import Patient
-from models.call_session import CallSession
+from models import VoiceInteraction as CallSession
 
 
 class CallType(Enum):

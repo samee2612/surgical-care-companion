@@ -15,7 +15,6 @@ import Testing from "@/pages/Testing";
 import Knowledge from "@/pages/Knowledge";
 import Integration from "@/pages/Integration";
 import Settings from "@/pages/Settings";
-import PatientsTest from "@/components/PatientsTest";
 
 function Router() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -45,11 +44,6 @@ function Router() {
           <Route path="/patients">
             <Layout>
               <Patients />
-            </Layout>
-          </Route>
-          <Route path="/patients-test">
-            <Layout>
-              <PatientsTest />
             </Layout>
           </Route>
           <Route path="/patients/:id">

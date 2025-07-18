@@ -3,25 +3,25 @@ import {
   patients,
   surgeries,
   voiceInteractions,
-  alerts,
-  knowledgeArticles,
-  systemSettings,
-  testSimulations,
+  clinicalStaff,
+  sessions,
   type User,
+  type NewUser,
   type UpsertUser,
   type Patient,
+  type NewPatient,
   type InsertPatient,
   type Surgery,
+  type NewSurgery,
   type InsertSurgery,
   type VoiceInteraction,
+  type NewVoiceInteraction,
   type InsertVoiceInteraction,
-  type Alert,
-  type InsertAlert,
-  type KnowledgeArticle,
-  type InsertKnowledgeArticle,
-  type SystemSetting,
-  type TestSimulation,
-  type InsertTestSimulation,
+  type ClinicalStaff,
+  type NewClinicalStaff,
+  type InsertClinicalStaff,
+  type Session,
+  type NewSession,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, or, sql, count, ilike } from "drizzle-orm";
@@ -46,32 +46,17 @@ export interface IStorage {
   getRecentVoiceInteractions(limit?: number): Promise<VoiceInteraction[]>;
   createVoiceInteraction(interaction: InsertVoiceInteraction): Promise<VoiceInteraction>;
   
-  // Alert operations
-  getActiveAlerts(limit?: number): Promise<Alert[]>;
-  getPriorityAlerts(priority: string, limit?: number): Promise<Alert[]>;
-  getAlertsForPatient(patientId: number): Promise<Alert[]>;
-  createAlert(alert: InsertAlert): Promise<Alert>;
-  updateAlert(id: number, alert: Partial<InsertAlert>): Promise<Alert>;
-  
-  // Knowledge Base operations
-  getKnowledgeArticles(category?: string, specialty?: string): Promise<KnowledgeArticle[]>;
-  searchKnowledgeArticles(query: string): Promise<KnowledgeArticle[]>;
-  createKnowledgeArticle(article: InsertKnowledgeArticle): Promise<KnowledgeArticle>;
-  
-  // System Settings operations
-  getSystemSettings(category?: string): Promise<SystemSetting[]>;
-  updateSystemSetting(key: string, value: any, updatedBy: string): Promise<SystemSetting>;
-  
-  // Test Simulation operations
-  getTestSimulations(testerId?: string, limit?: number): Promise<TestSimulation[]>;
-  createTestSimulation(simulation: InsertTestSimulation): Promise<TestSimulation>;
+  // Clinical Staff operations
+  getClinicalStaff(): Promise<ClinicalStaff[]>;
+  getClinicalStaffById(id: string): Promise<ClinicalStaff | undefined>;
+  createClinicalStaff(staff: InsertClinicalStaff): Promise<ClinicalStaff>;
   
   // Dashboard statistics
   getDashboardStats(): Promise<{
-    activePatients: number;
-    readmissionRate: number;
-    voiceInteractions: number;
-    detectionAccuracy: number;
+    totalPatients: number;
+    totalSurgeries: number;
+    recentCalls: number;
+    activeCases: number;
   }>;
 }
 
@@ -108,10 +93,10 @@ export class DatabaseStorage implements IStorage {
           ilike(patients.lastName, `%${search}%`),
           ilike(patients.mrn, `%${search}%`)
         )
-      ) as any;
+      );
     }
     
-    return await query.orderBy(desc(patients.updatedAt)).limit(limit).offset(offset);
+    return await query.orderBy(desc(patients.createdAt)).limit(limit).offset(offset);
   }
 
   async getPatient(id: number): Promise<Patient | undefined> {
@@ -170,151 +155,42 @@ export class DatabaseStorage implements IStorage {
     return newInteraction;
   }
 
-  // Alert operations
-  async getActiveAlerts(limit = 20): Promise<Alert[]> {
+  // Clinical Staff operations
+  async getClinicalStaff(): Promise<ClinicalStaff[]> {
     return await db
       .select()
-      .from(alerts)
-      .where(eq(alerts.status, "active"))
-      .orderBy(desc(alerts.createdAt))
-      .limit(limit);
+      .from(clinicalStaff)
+      .where(eq(clinicalStaff.isActive, true))
+      .orderBy(desc(clinicalStaff.createdAt));
   }
 
-  async getPriorityAlerts(priority: string, limit = 10): Promise<Alert[]> {
-    return await db
-      .select()
-      .from(alerts)
-      .where(and(eq(alerts.priority, priority), eq(alerts.status, "active")))
-      .orderBy(desc(alerts.createdAt))
-      .limit(limit);
+  async getClinicalStaffById(id: string): Promise<ClinicalStaff | undefined> {
+    const [staff] = await db.select().from(clinicalStaff).where(eq(clinicalStaff.id, id));
+    return staff;
   }
 
-  async getAlertsForPatient(patientId: number): Promise<Alert[]> {
-    return await db
-      .select()
-      .from(alerts)
-      .where(eq(alerts.patientId, patientId))
-      .orderBy(desc(alerts.createdAt));
-  }
-
-  async createAlert(alert: InsertAlert): Promise<Alert> {
-    const [newAlert] = await db.insert(alerts).values(alert).returning();
-    return newAlert;
-  }
-
-  async updateAlert(id: number, alert: Partial<InsertAlert>): Promise<Alert> {
-    const [updatedAlert] = await db
-      .update(alerts)
-      .set({ ...alert, updatedAt: new Date() })
-      .where(eq(alerts.id, id))
-      .returning();
-    return updatedAlert;
-  }
-
-  // Knowledge Base operations
-  async getKnowledgeArticles(category?: string, specialty?: string): Promise<KnowledgeArticle[]> {
-    let query = db.select().from(knowledgeArticles).where(eq(knowledgeArticles.published, true));
-    
-    if (category) {
-      query = query.where(eq(knowledgeArticles.category, category)) as any;
-    }
-    
-    if (specialty) {
-      query = query.where(eq(knowledgeArticles.specialty, specialty)) as any;
-    }
-    
-    return await query.orderBy(desc(knowledgeArticles.updatedAt));
-  }
-
-  async searchKnowledgeArticles(query: string): Promise<KnowledgeArticle[]> {
-    return await db
-      .select()
-      .from(knowledgeArticles)
-      .where(
-        and(
-          eq(knowledgeArticles.published, true),
-          or(
-            ilike(knowledgeArticles.title, `%${query}%`),
-            ilike(knowledgeArticles.content, `%${query}%`)
-          )
-        )
-      )
-      .orderBy(desc(knowledgeArticles.updatedAt));
-  }
-
-  async createKnowledgeArticle(article: InsertKnowledgeArticle): Promise<KnowledgeArticle> {
-    const [newArticle] = await db.insert(knowledgeArticles).values(article).returning();
-    return newArticle;
-  }
-
-  // System Settings operations
-  async getSystemSettings(category?: string): Promise<SystemSetting[]> {
-    let query = db.select().from(systemSettings);
-    
-    if (category) {
-      query = query.where(eq(systemSettings.category, category)) as any;
-    }
-    
-    return await query.orderBy(systemSettings.key);
-  }
-
-  async updateSystemSetting(key: string, value: any, updatedBy: string): Promise<SystemSetting> {
-    const [setting] = await db
-      .insert(systemSettings)
-      .values({ key, value, updatedBy, updatedAt: new Date() })
-      .onConflictDoUpdate({
-        target: systemSettings.key,
-        set: { value, updatedBy, updatedAt: new Date() },
-      })
-      .returning();
-    return setting;
-  }
-
-  // Test Simulation operations
-  async getTestSimulations(testerId?: string, limit = 20): Promise<TestSimulation[]> {
-    let query = db.select().from(testSimulations);
-    
-    if (testerId) {
-      query = query.where(eq(testSimulations.testerId, testerId)) as any;
-    }
-    
-    return await query.orderBy(desc(testSimulations.createdAt)).limit(limit);
-  }
-
-  async createTestSimulation(simulation: InsertTestSimulation): Promise<TestSimulation> {
-    const [newSimulation] = await db.insert(testSimulations).values(simulation).returning();
-    return newSimulation;
+  async createClinicalStaff(staff: InsertClinicalStaff): Promise<ClinicalStaff> {
+    const [newStaff] = await db.insert(clinicalStaff).values(staff).returning();
+    return newStaff;
   }
 
   // Dashboard statistics
   async getDashboardStats(): Promise<{
-    activePatients: number;
-    readmissionRate: number;
-    voiceInteractions: number;
-    detectionAccuracy: number;
+    totalPatients: number;
+    totalSurgeries: number;
+    recentCalls: number;
+    activeCases: number;
   }> {
-    // Active patients count
-    const [{ count: activePatients }] = await db
-      .select({ count: count() })
-      .from(patients)
-      .where(eq(patients.programActive, true));
+    const [patientCount] = await db.select({ count: count() }).from(patients);
+    const [surgeryCount] = await db.select({ count: count() }).from(surgeries);
+    const [callCount] = await db.select({ count: count() }).from(voiceInteractions);
+    const [activeCount] = await db.select({ count: count() }).from(patients).where(eq(patients.isActive, true));
 
-    // Voice interactions count (last 7 days)
-    const weekAgo = new Date();
-    weekAgo.setDate(weekAgo.getDate() - 7);
-    
-    const [{ count: recentInteractions }] = await db
-      .select({ count: count() })
-      .from(voiceInteractions)
-      .where(sql`${voiceInteractions.callDate} > ${weekAgo}`);
-
-    // For now, return static values for readmission rate and detection accuracy
-    // These would be calculated from actual data in a real implementation
     return {
-      activePatients: activePatients || 0,
-      readmissionRate: 8.2,
-      voiceInteractions: recentInteractions || 0,
-      detectionAccuracy: 94.7,
+      totalPatients: patientCount.count,
+      totalSurgeries: surgeryCount.count,
+      recentCalls: callCount.count,
+      activeCases: activeCount.count,
     };
   }
 }

@@ -18,11 +18,19 @@ passlib[bcrypt]==1.7.4
 python-multipart==0.0.12
 
 # AI Services (Compatible versions)
-openai==1.54.4
+# openai==1.54.4
 google-generativeai==0.8.3
 
 # Telephony
 twilio==9.3.7
+
+# Audio Processing & Transcription
+# openai-whisper==20231117
+# torch==2.1.0
+# torchaudio==2.1.0
+librosa==0.10.1
+soundfile==0.12.1
+pydub==0.25.1
 
 # HTTP Client
 httpx==0.27.2

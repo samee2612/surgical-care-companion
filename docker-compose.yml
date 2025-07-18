@@ -1,30 +1,29 @@
-version: '3.8'
-
 services:
   # PostgreSQL Database
   postgres:
-    image: postgres:15-alpine
-    container_name: tka_postgres
+    image: postgres:16
+    container_name: surgicalcare_postgres
     environment:
-      POSTGRES_DB: tka_voice
       POSTGRES_USER: user
       POSTGRES_PASSWORD: password
+      POSTGRES_DB: surgicalcare_db
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./docs/database_schema.sql:/docker-entrypoint-initdb.d/init.sql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U user -d tka_voice"]
-      interval: 10s
-      timeout: 5s
+      test: ["CMD-SHELL", "pg_isready -U user -d surgicalcare_db"]
+      interval: 30s
+      timeout: 10s
       retries: 5
+      start_period: 60s
     restart: unless-stopped
 
   # Redis Cache
   redis:
     image: redis:7-alpine
-    container_name: tka_redis
+    container_name: surgicalcare_redis
     ports:
       - "6379:6379"
     volumes:
@@ -36,38 +35,24 @@ services:
       retries: 5
     restart: unless-stopped
 
-  # pgAdmin Database Administration
-  pgadmin:
-    image: dpage/pgadmin4:latest
-    container_name: tka_pgadmin
-    depends_on:
-      - postgres
-    environment:
-      PGADMIN_DEFAULT_EMAIL: admin@tka.com
-      PGADMIN_DEFAULT_PASSWORD: admin
-      PGADMIN_CONFIG_SERVER_MODE: 'False'
-    ports:
-      - "5050:80"
-    volumes:
-      - pgadmin_data:/var/lib/pgadmin
-    restart: unless-stopped
-
-  # TKA Voice Agent Backend
+  # Backend API
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: tka_backend
+    container_name: surgicalcare_backend
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgresql://user:password@postgres:5432/tka_voice
+      DATABASE_URL: postgresql://user:password@postgres:5432/surgicalcare_db
       REDIS_URL: redis://redis:6379
       ENVIRONMENT: development
       DEBUG: true
+    env_file:
+      - .env
     ports:
       - "8000:8000"
     volumes:
@@ -76,38 +61,40 @@ services:
     command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
     restart: unless-stopped
 
-  # TKA Voice Agent Frontend
+  # Frontend
   frontend:
     build:
-      context: ./frontend
+      context: ./HealthSenseCare
       dockerfile: Dockerfile
-    container_name: tka_frontend
+    container_name: surgicalcare_frontend
     depends_on:
       - backend
     environment:
-      REACT_APP_API_URL: http://localhost:8000
+      VITE_API_URL: http://localhost:8000
+      REPLIT_DOMAINS: localhost:3000
+      SESSION_SECRET: 11c167a1ccc61b1c07e2c3e72acd03e7e3b32fd97b11d0d972e3b23de2c91f6f4a8358a9f50ce87b2207203c4e0e4b82115efad3b883445a358dbf12378b3ef4
+    env_file:
+      - .env
     ports:
-      - "3000:3000"
+      - "3000:5000"
     volumes:
-      - ./frontend:/app
+      - ./HealthSenseCare:/app
       - /app/node_modules
-    command: npm start
     restart: unless-stopped
 
-  # Surgical Care PostgreSQL Database
-  surgicalcare_postgres:
-    image: postgres:16
-    container_name: surgicalcare_postgres
+  # Ngrok for webhook tunneling
+  ngrok:
+    image: ngrok/ngrok:latest
+    container_name: surgicalcare_ngrok
+    depends_on:
+      - backend
     environment:
-      POSTGRES_USER: harsh
-      POSTGRES_PASSWORD: harshpassword
-      POSTGRES_DB: surgicalcare_db
+      NGROK_AUTHTOKEN: ${NGROK_AUTH_TOKEN:-}
+    command: http backend:8000
     ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - "4040:4040"  # Ngrok web interface
+    restart: unless-stopped
 
 volumes:
   postgres_data:
   redis_data:
-  pgadmin_data:

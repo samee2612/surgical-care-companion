@@ -5,108 +5,106 @@ Handles patient enrollment, retrieval, and management.
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from typing import List, Optional, Union, Any
-from datetime import datetime, timedelta
-import uuid
+from typing import List, Optional
+from datetime import datetime, date
 
 from database.connection import get_db
-from models import Patient, ClinicalStaff, CallSession
+from models import Patient, VoiceInteraction
 from pydantic import BaseModel, ConfigDict
 
 router = APIRouter()
 
 # Pydantic models for request/response
 class PatientCreate(BaseModel):
-    name: str
-    primary_phone_number: str
-    secondary_phone_number: Optional[str] = None
-    surgery_date: datetime
-    primary_physician_id: str
-    surgery_type: str = "knee"
+    mrn: Optional[str] = None
+    first_name: str
+    last_name: str
+    date_of_birth: Optional[date] = None
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    emergency_contact_name: Optional[str] = None
+    emergency_contact_phone: Optional[str] = None
+    voice_consent_given: bool = False
+    data_consent_given: bool = False
 
 class PatientResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     
-    id: Union[str, uuid.UUID]
-    name: str
-    primary_phone_number: str
-    secondary_phone_number: Optional[str] = None
-    surgery_date: datetime
-    surgery_readiness_status: str
-    overall_compliance_score: float
+    id: int
+    mrn: Optional[str] = None
+    first_name: str
+    last_name: str
+    date_of_birth: Optional[date] = None
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    emergency_contact_name: Optional[str] = None
+    emergency_contact_phone: Optional[str] = None
+    voice_consent_given: bool
+    data_consent_given: bool
+    program_active: bool
+    enrollment_date: Optional[datetime] = None
     created_at: datetime
+    updated_at: datetime
 
-class CallSessionResponse(BaseModel):
+class VoiceInteractionResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     
-    id: Union[str, uuid.UUID]
-    call_type: str
-    scheduled_date: datetime
-    days_from_surgery: int
-    call_status: str
-    compliance_score: Optional[int] = None
+    id: int
+    call_date: datetime
+    call_duration: Optional[int] = None
+    call_status: Optional[str] = None
+    pain_level: Optional[int] = None
+    concerns: Optional[str] = None
 
-@router.post("/enroll", response_model=PatientResponse)
-async def enroll_patient(patient_data: PatientCreate, db: Session = Depends(get_db)):
-    """Enroll a new patient and auto-generate call schedule"""
+@router.post("/", response_model=PatientResponse)
+async def create_patient(patient_data: PatientCreate, db: Session = Depends(get_db)):
+    """Create a new patient"""
     
     try:
-        # Verify physician exists
-        physician = db.query(ClinicalStaff).filter(ClinicalStaff.id == patient_data.primary_physician_id).first()
-        if not physician:
-            raise HTTPException(status_code=400, detail="Physician not found")
-        
         # Create patient
         new_patient = Patient(
-            name=patient_data.name,
-            primary_phone_number=patient_data.primary_phone_number,
-            secondary_phone_number=patient_data.secondary_phone_number,
-            surgery_date=patient_data.surgery_date,
-            primary_physician_id=patient_data.primary_physician_id,
-            surgery_readiness_status="pending",
-            overall_compliance_score=0.0
+            mrn=patient_data.mrn,
+            first_name=patient_data.first_name,
+            last_name=patient_data.last_name,
+            date_of_birth=patient_data.date_of_birth,
+            phone=patient_data.phone,
+            email=patient_data.email,
+            emergency_contact_name=patient_data.emergency_contact_name,
+            emergency_contact_phone=patient_data.emergency_contact_phone,
+            voice_consent_given=patient_data.voice_consent_given,
+            data_consent_given=patient_data.data_consent_given,
+            program_active=True,
+            enrollment_date=datetime.utcnow()
         )
         
         db.add(new_patient)
         db.commit()
         db.refresh(new_patient)
         
-        # Auto-generate call schedule
-        call_schedule = [
-            (-35, "initial_clinical_assessment"),  # 5 weeks pre-op (4-6 weeks range)
-            (-28, "education"),  # Week 4
-            (-21, "education"),  # Week 3
-            (-14, "education"),  # Week 2
-            (-7, "education"),   # Week 1
-            (-1, "final_prep")
-        ]
-        
-        for days_from_surgery, call_type in call_schedule:
-            scheduled_date = patient_data.surgery_date + timedelta(days=days_from_surgery)
-            
-            call_session = CallSession(
-                patient_id=new_patient.id,
-                stage="preop",
-                surgery_type=patient_data.surgery_type,
-                scheduled_date=scheduled_date,
-                days_from_surgery=days_from_surgery,
-                call_type=call_type,
-                call_status="scheduled"
-            )
-            
-            db.add(call_session)
-        
-        db.commit()
-        
         return PatientResponse.model_validate(new_patient)
         
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to enroll patient: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to create patient: {str(e)}")
+
+@router.get("/", response_model=List[PatientResponse])
+async def list_patients(
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db)
+):
+    """List all patients"""
+    
+    try:
+        patients = db.query(Patient).offset(skip).limit(limit).all()
+        return [PatientResponse.model_validate(patient) for patient in patients]
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to list patients: {str(e)}")
 
 @router.get("/{patient_id}", response_model=PatientResponse)
-async def get_patient(patient_id: str, db: Session = Depends(get_db)):
-    """Get patient details by ID"""
+async def get_patient(patient_id: int, db: Session = Depends(get_db)):
+    """Get a specific patient by ID"""
     
     try:
         patient = db.query(Patient).filter(Patient.id == patient_id).first()
@@ -120,51 +118,79 @@ async def get_patient(patient_id: str, db: Session = Depends(get_db)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get patient: {str(e)}")
 
-@router.get("/{patient_id}/calls", response_model=List[CallSessionResponse])
-async def get_patient_calls(patient_id: str, db: Session = Depends(get_db)):
-    """Get all calls for a patient"""
+@router.get("/{patient_id}/voice-interactions", response_model=List[VoiceInteractionResponse])
+async def get_patient_voice_interactions(
+    patient_id: int,
+    skip: int = 0,
+    limit: int = 10,
+    db: Session = Depends(get_db)
+):
+    """Get voice interactions for a specific patient"""
     
     try:
-        # Verify patient exists
+        # Check if patient exists
         patient = db.query(Patient).filter(Patient.id == patient_id).first()
         if not patient:
             raise HTTPException(status_code=404, detail="Patient not found")
         
-        calls = db.query(CallSession).filter(CallSession.patient_id == patient_id).order_by(CallSession.scheduled_date).all()
+        # Get voice interactions
+        interactions = db.query(VoiceInteraction).filter(
+            VoiceInteraction.patient_id == patient_id
+        ).offset(skip).limit(limit).all()
         
-        return [CallSessionResponse.model_validate(call) for call in calls]
+        return [VoiceInteractionResponse.model_validate(interaction) for interaction in interactions]
         
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get patient calls: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get voice interactions: {str(e)}")
 
-@router.get("/")
-async def list_patients(db: Session = Depends(get_db)):
-    """List all patients"""
+@router.put("/{patient_id}", response_model=PatientResponse)
+async def update_patient(
+    patient_id: int,
+    patient_data: PatientCreate,
+    db: Session = Depends(get_db)
+):
+    """Update a patient"""
     
     try:
-        patients = db.query(Patient).all()
-        return [PatientResponse.model_validate(patient) for patient in patients]
+        patient = db.query(Patient).filter(Patient.id == patient_id).first()
+        if not patient:
+            raise HTTPException(status_code=404, detail="Patient not found")
         
+        # Update patient fields
+        for field, value in patient_data.model_dump(exclude_unset=True).items():
+            setattr(patient, field, value)
+        
+        patient.updated_at = datetime.utcnow()
+        
+        db.commit()
+        db.refresh(patient)
+        
+        return PatientResponse.model_validate(patient)
+        
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to list patients: {str(e)}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to update patient: {str(e)}")
 
-@router.get("/staff/list")
-async def list_clinical_staff(db: Session = Depends(get_db)):
-    """List all clinical staff (for enrollment forms)"""
+@router.delete("/{patient_id}")
+async def delete_patient(patient_id: int, db: Session = Depends(get_db)):
+    """Delete a patient"""
     
     try:
-        staff = db.query(ClinicalStaff).all()
-        return [
-            {
-                "id": str(staff_member.id),
-                "name": staff_member.name,
-                "role": staff_member.role,
-                "email": staff_member.email
-            }
-            for staff_member in staff
-        ]
+        patient = db.query(Patient).filter(Patient.id == patient_id).first()
+        if not patient:
+            raise HTTPException(status_code=404, detail="Patient not found")
         
+        db.delete(patient)
+        db.commit()
+        
+        return {"message": "Patient deleted successfully"}
+        
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to list staff: {str(e)}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to delete patient: {str(e)}")

@@ -8,8 +8,8 @@ import {
   serial,
   integer,
   boolean,
-  decimal,
   date,
+  uuid,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -26,33 +26,37 @@ export const sessions = pgTable(
   (table) => [index("IDX_session_expire").on(table.expire)],
 );
 
-// User storage table (required for Replit Auth)
+// User storage table (required for Replit Auth)  
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().notNull(),
   email: varchar("email").unique(),
   firstName: varchar("first_name"),
   lastName: varchar("last_name"),
   profileImageUrl: varchar("profile_image_url"),
-  role: varchar("role").notNull().default("provider"), // provider, admin, patient
+  role: varchar("role").notNull().default("provider"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-// Patients table
+// Patients table - core entity
 export const patients = pgTable("patients", {
   id: serial("id").primaryKey(),
-  mrn: varchar("mrn").notNull().unique(),
+  mrn: varchar("mrn").unique(),
   firstName: varchar("first_name").notNull(),
   lastName: varchar("last_name").notNull(),
-  dateOfBirth: date("date_of_birth").notNull(),
+  dateOfBirth: date("date_of_birth"),
   phone: varchar("phone"),
   email: varchar("email"),
+  address: text("address"),
   emergencyContactName: varchar("emergency_contact_name"),
   emergencyContactPhone: varchar("emergency_contact_phone"),
-  voiceConsentGiven: boolean("voice_consent_given").default(false),
-  dataConsentGiven: boolean("data_consent_given").default(false),
-  programActive: boolean("program_active").default(true),
-  enrollmentDate: timestamp("enrollment_date").defaultNow(),
+  emergencyContactRelationship: varchar("emergency_contact_relationship"),
+  medicalHistory: text("medical_history"),
+  currentMedications: text("current_medications"),
+  allergies: text("allergies"),
+  insuranceInfo: text("insurance_info"),
+  preferredLanguage: varchar("preferred_language").default("en"),
+  isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -61,108 +65,57 @@ export const patients = pgTable("patients", {
 export const surgeries = pgTable("surgeries", {
   id: serial("id").primaryKey(),
   patientId: integer("patient_id").references(() => patients.id).notNull(),
-  procedure: varchar("procedure").notNull(),
-  surgeonName: varchar("surgeon_name").notNull(),
+  procedure: varchar("procedure", { length: 255 }).notNull(),
+  surgeonName: varchar("surgeon_name", { length: 255 }).notNull(),
   surgeryDate: date("surgery_date").notNull(),
   dischargeDate: date("discharge_date"),
   expectedRecoveryWeeks: integer("expected_recovery_weeks"),
-  specialty: varchar("specialty").notNull(), // orthopedic, cardiac, general, neuro
+  specialty: varchar("specialty", { length: 100 }).notNull(),
   notes: text("notes"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-// Voice Interactions table
+// Voice Interactions table - for TwiML calls
 export const voiceInteractions = pgTable("voice_interactions", {
   id: serial("id").primaryKey(),
   patientId: integer("patient_id").references(() => patients.id).notNull(),
   surgeryId: integer("surgery_id").references(() => surgeries.id).notNull(),
   callDate: timestamp("call_date").notNull(),
-  duration: integer("duration"), // in seconds
+  callDuration: integer("call_duration"), // in seconds
+  callSid: varchar("call_sid", { length: 255 }).unique(),
+  phoneNumber: varchar("phone_number", { length: 20 }),
+  callDirection: varchar("call_direction", { length: 20 }),
+  callStatus: varchar("call_status", { length: 20 }),
   transcript: text("transcript"),
-  symptoms: jsonb("symptoms"), // array of detected symptoms
-  painLevel: integer("pain_level"), // 1-10 scale
-  riskScore: decimal("risk_score", { precision: 5, scale: 2 }),
-  status: varchar("status").notNull(), // completed, failed, escalated, normal
-  escalated: boolean("escalated").default(false),
-  escalationReason: text("escalation_reason"),
-  aiAnalysis: jsonb("ai_analysis"),
-  callSuccessful: boolean("call_successful").default(true),
-  createdAt: timestamp("created_at").defaultNow(),
-});
-
-// Alerts table
-export const alerts = pgTable("alerts", {
-  id: serial("id").primaryKey(),
-  patientId: integer("patient_id").references(() => patients.id).notNull(),
-  voiceInteractionId: integer("voice_interaction_id").references(() => voiceInteractions.id),
-  priority: varchar("priority").notNull(), // high, medium, low
-  status: varchar("status").notNull().default("active"), // active, resolved, dismissed
-  title: varchar("title").notNull(),
-  description: text("description"),
-  riskScore: decimal("risk_score", { precision: 5, scale: 2 }),
-  assignedProviderId: varchar("assigned_provider_id").references(() => users.id),
-  resolvedAt: timestamp("resolved_at"),
-  resolvedBy: varchar("resolved_by").references(() => users.id),
+  intentExtraction: jsonb("intent_extraction"),
+  sentimentAnalysis: jsonb("sentiment_analysis"),
+  painLevel: integer("pain_level"),
+  concerns: text("concerns"),
+  followUpRequired: boolean("follow_up_required").default(false),
+  followUpNotes: text("follow_up_notes"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-// Knowledge Base Articles table
-export const knowledgeArticles = pgTable("knowledge_articles", {
-  id: serial("id").primaryKey(),
-  title: varchar("title").notNull(),
-  content: text("content").notNull(),
-  category: varchar("category").notNull(), // clinical, patient-education, technical, faq, ai-models
-  specialty: varchar("specialty"), // orthopedic, cardiac, general, neuro
-  tags: jsonb("tags"), // array of tags
-  authorId: varchar("author_id").references(() => users.id),
-  published: boolean("published").default(false),
-  readingLevel: varchar("reading_level"), // elementary, middle, high
-  language: varchar("language").default("en"),
-  version: varchar("version").default("1.0"),
+// Clinical Staff table
+export const clinicalStaff = pgTable("clinical_staff", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: varchar("user_id", { length: 255 }),
+  name: varchar("name", { length: 255 }).notNull(),
+  email: varchar("email", { length: 255 }).notNull().unique(),
+  role: varchar("role", { length: 50 }).notNull(),
+  specialty: varchar("specialty", { length: 100 }),
+  phone: varchar("phone", { length: 20 }),
+  isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-// System Settings table
-export const systemSettings = pgTable("system_settings", {
-  id: serial("id").primaryKey(),
-  key: varchar("key").notNull().unique(),
-  value: jsonb("value"),
-  description: text("description"),
-  category: varchar("category").notNull(), // alerts, twilio, billing, ai
-  updatedBy: varchar("updated_by").references(() => users.id),
-  updatedAt: timestamp("updated_at").defaultNow(),
-});
-
-// Test Simulations table
-export const testSimulations = pgTable("test_simulations", {
-  id: serial("id").primaryKey(),
-  testerId: varchar("tester_id").references(() => users.id).notNull(),
-  patientProfile: varchar("patient_profile").notNull(),
-  injectedSymptoms: jsonb("injected_symptoms"),
-  customSymptoms: text("custom_symptoms"),
-  resultingRiskScore: decimal("resulting_risk_score", { precision: 5, scale: 2 }),
-  aiDecision: varchar("ai_decision").notNull(),
-  transcript: text("transcript"),
-  detectedSymptoms: jsonb("detected_symptoms"),
-  escalationTriggered: boolean("escalation_triggered").default(false),
-  createdAt: timestamp("created_at").defaultNow(),
-});
-
-// Relations
-export const usersRelations = relations(users, ({ many }) => ({
-  assignedAlerts: many(alerts, { relationName: "assignedProvider" }),
-  resolvedAlerts: many(alerts, { relationName: "resolvedBy" }),
-  knowledgeArticles: many(knowledgeArticles),
-  testSimulations: many(testSimulations),
-}));
-
+// Simple relationships
 export const patientsRelations = relations(patients, ({ many }) => ({
   surgeries: many(surgeries),
   voiceInteractions: many(voiceInteractions),
-  alerts: many(alerts),
 }));
 
 export const surgeriesRelations = relations(surgeries, ({ one, many }) => ({
@@ -173,7 +126,7 @@ export const surgeriesRelations = relations(surgeries, ({ one, many }) => ({
   voiceInteractions: many(voiceInteractions),
 }));
 
-export const voiceInteractionsRelations = relations(voiceInteractions, ({ one, many }) => ({
+export const voiceInteractionsRelations = relations(voiceInteractions, ({ one }) => ({
   patient: one(patients, {
     fields: [voiceInteractions.patientId],
     references: [patients.id],
@@ -182,83 +135,48 @@ export const voiceInteractionsRelations = relations(voiceInteractions, ({ one, m
     fields: [voiceInteractions.surgeryId],
     references: [surgeries.id],
   }),
-  alerts: many(alerts),
 }));
 
-export const alertsRelations = relations(alerts, ({ one }) => ({
-  patient: one(patients, {
-    fields: [alerts.patientId],
-    references: [patients.id],
-  }),
-  voiceInteraction: one(voiceInteractions, {
-    fields: [alerts.voiceInteractionId],
-    references: [voiceInteractions.id],
-  }),
-  assignedProvider: one(users, {
-    fields: [alerts.assignedProviderId],
+export const clinicalStaffRelations = relations(clinicalStaff, ({ one }) => ({
+  user: one(users, {
+    fields: [clinicalStaff.userId],
     references: [users.id],
-    relationName: "assignedProvider",
-  }),
-  resolvedByUser: one(users, {
-    fields: [alerts.resolvedBy],
-    references: [users.id],
-    relationName: "resolvedBy",
   }),
 }));
 
-// Insert schemas
-export const insertUserSchema = createInsertSchema(users).omit({
-  createdAt: true,
-  updatedAt: true,
-});
+export const usersRelations = relations(users, ({ one }) => ({
+  clinicalStaff: one(clinicalStaff, {
+    fields: [users.id],
+    references: [clinicalStaff.userId],
+  }),
+}));
 
-export const insertPatientSchema = createInsertSchema(patients).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-});
+// Export Zod schemas for validation
+export const insertPatientSchema = createInsertSchema(patients);
+export const insertSurgerySchema = createInsertSchema(surgeries);
+export const insertVoiceInteractionSchema = createInsertSchema(voiceInteractions);
+export const insertClinicalStaffSchema = createInsertSchema(clinicalStaff);
+export const insertUserSchema = createInsertSchema(users);
+export const insertSessionSchema = createInsertSchema(sessions);
 
-export const insertSurgerySchema = createInsertSchema(surgeries).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-});
-
-export const insertVoiceInteractionSchema = createInsertSchema(voiceInteractions).omit({
-  id: true,
-  createdAt: true,
-});
-
-export const insertAlertSchema = createInsertSchema(alerts).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-});
-
-export const insertKnowledgeArticleSchema = createInsertSchema(knowledgeArticles).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-});
-
-export const insertTestSimulationSchema = createInsertSchema(testSimulations).omit({
-  id: true,
-  createdAt: true,
-});
-
-// Types
-export type UpsertUser = z.infer<typeof insertUserSchema>;
-export type User = typeof users.$inferSelect;
+// Export types
 export type Patient = typeof patients.$inferSelect;
-export type InsertPatient = z.infer<typeof insertPatientSchema>;
 export type Surgery = typeof surgeries.$inferSelect;
-export type InsertSurgery = z.infer<typeof insertSurgerySchema>;
 export type VoiceInteraction = typeof voiceInteractions.$inferSelect;
-export type InsertVoiceInteraction = z.infer<typeof insertVoiceInteractionSchema>;
-export type Alert = typeof alerts.$inferSelect;
-export type InsertAlert = z.infer<typeof insertAlertSchema>;
-export type KnowledgeArticle = typeof knowledgeArticles.$inferSelect;
-export type InsertKnowledgeArticle = z.infer<typeof insertKnowledgeArticleSchema>;
-export type SystemSetting = typeof systemSettings.$inferSelect;
-export type TestSimulation = typeof testSimulations.$inferSelect;
-export type InsertTestSimulation = z.infer<typeof insertTestSimulationSchema>;
+export type ClinicalStaff = typeof clinicalStaff.$inferSelect;
+export type User = typeof users.$inferSelect;
+export type Session = typeof sessions.$inferSelect;
+
+export type NewPatient = typeof patients.$inferInsert;
+export type NewSurgery = typeof surgeries.$inferInsert;
+export type NewVoiceInteraction = typeof voiceInteractions.$inferInsert;
+export type NewClinicalStaff = typeof clinicalStaff.$inferInsert;
+export type NewUser = typeof users.$inferInsert;
+export type NewSession = typeof sessions.$inferInsert;
+
+// Legacy aliases for compatibility
+export type InsertPatient = NewPatient;
+export type InsertSurgery = NewSurgery;
+export type InsertVoiceInteraction = NewVoiceInteraction;
+export type InsertClinicalStaff = NewClinicalStaff;
+export type UpsertUser = NewUser;

@@ -59,9 +59,7 @@ def create_tables():
     """Create all database tables - with error handling"""
     try:
         # Import all models to ensure they're registered
-        from models.patient import Patient
-        from models.clinical_staff import ClinicalStaff
-        from models.call_session import CallSession
+        from models import Patient, ClinicalStaff, VoiceInteraction
         
         # Create all tables
         Base.metadata.create_all(bind=engine)
@@ -100,9 +98,7 @@ async def check_db_connection():
 def init_db():
     """Initialize database with sample data."""
     try:
-        from models.patient import Patient
-        from models.clinical_staff import ClinicalStaff
-        from models.call_session import CallSession
+        from models import Patient, ClinicalStaff, VoiceInteraction
         
         db = SessionLocal()
         
