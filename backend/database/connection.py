@@ -10,7 +10,7 @@ from sqlalchemy.pool import StaticPool
 import logging
 from typing import Generator
 
-from config import settings
+from backend.config import settings
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -59,9 +59,9 @@ def create_tables():
     """Create all database tables - with error handling"""
     try:
         # Import all models to ensure they're registered
-        from models.patient import Patient
-        from models.clinical_staff import ClinicalStaff
-        from models.call_session import CallSession
+        from backend.models.patient import Patient
+        from backend.models.clinical_staff import ClinicalStaff
+        from backend.models.call_session import CallSession
         
         # Create all tables
         Base.metadata.create_all(bind=engine)
@@ -100,9 +100,9 @@ async def check_db_connection():
 def init_db():
     """Initialize database with sample data."""
     try:
-        from models.patient import Patient
-        from models.clinical_staff import ClinicalStaff
-        from models.call_session import CallSession
+        from backend.models.patient import Patient
+        from backend.models.clinical_staff import ClinicalStaff
+        from backend.models.call_session import CallSession
         
         db = SessionLocal()
         

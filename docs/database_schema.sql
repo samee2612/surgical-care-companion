@@ -111,3 +111,4 @@ VALUES
   ((SELECT id FROM patients WHERE name = 'John Smith'), 'preop', 'knee', '2024-01-01', -14, 'preparation'),
   ((SELECT id FROM patients WHERE name = 'John Smith'), 'preop', 'knee', '2024-01-08', -7, 'preparation'),
   ((SELECT id FROM patients WHERE name = 'John Smith'), 'preop', 'knee', '2024-01-14', -1, 'final_prep');
+ 

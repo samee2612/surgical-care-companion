@@ -22,8 +22,8 @@ class ContextInjectionService:
         
         if call_context.call_type == CallType.INITIAL_CLINICAL_ASSESSMENT:
             return self._generate_initial_clinical_assessment_prompt(call_context, is_initial_call)
-        elif call_context.call_type == CallType.EDUCATION:
-            return self._generate_education_prompt(call_context, is_initial_call)
+        elif call_context.call_type == CallType.PREPARATION:
+            return self._generate_preparation_prompt(call_context, is_initial_call)
         else:
             return self._generate_default_prompt(call_context, is_initial_call)
     
@@ -54,8 +54,8 @@ STRICT CONVERSATION RULES:
 - Ask ONLY ONE question at a time
 - Wait for response before asking next question
 - Cover areas in exact order listed above
-- NO follow-up questions within an area
-- NO additional topics or explanations
+- NO skipping or combining areas
+- NO wrap-up until ALL 4 areas are covered
 - Once area answered → move to next area immediately
 - NEVER ask about surgery date again after it's confirmed
 
@@ -84,7 +84,10 @@ RESPONSE DECISION TREE:
 2. If any unchecked → Ask about ONLY the next unchecked area
 3. NEVER ask about already-covered topics
 4. NEVER ask multiple questions in one response
-5. NEVER ask about surgery date again if already discussed
+5. NO skipping or combining areas
+6. NO wrap-up until ALL 4 areas are covered
+7. Ask about each area in exact order
+8. NEVER ask about surgery date again if already discussed
 
 WRAP-UP SCRIPT (use when all 4 areas covered):
 "Thank you so much, {patient['name']}. I have all the information I need for now. We'll be in touch with more details as your surgery approaches. Do you have any immediate questions before we finish?"
@@ -113,7 +116,7 @@ CRITICAL INSTRUCTIONS:
 - Review conversation history to identify what's already been covered
 - Ask ONLY about the next uncovered area from the 4 required areas
 - If all 4 areas covered → Use wrap-up script immediately
-- ONE question only - be conversational and acknowledge their previous responses
+- ONE question at a time - be conversational and acknowledge their previous responses
 - NEVER repeat questions about surgery date if already discussed
 
 Continue with the appropriate next step based on conversation history.
@@ -132,73 +135,98 @@ Continue with the appropriate next step based on conversation history.
             }
         }
     
-    def _generate_education_prompt(self, context: CallContext, is_initial_call: bool = True) -> Dict[str, Any]:
-        """Generate education-specific prompt based on week/topic"""
+    def _generate_preparation_prompt(self, context: CallContext, is_initial_call: bool = True) -> Dict[str, Any]:
+        """Generate preparation call-specific prompt"""
         
+        # Extract patient data
         patient = context.patient_data
         structure = context.conversation_structure
-        week = structure.get("week", "Unknown")
-        focus_topic = structure.get("focus_topic", "Educational Content")
         
-        system_prompt = f"""
-You are a caring and professional AI healthcare assistant conducting {week} educational call with {patient['name']} about their upcoming knee replacement surgery in {patient['days_until_surgery']} days.
+        # Build different system prompts for initial vs ongoing conversations
+        if is_initial_call:
+            # Streamlined prompt for starting the preparation conversation
+            system_prompt = f"""
+You are a caring AI healthcare assistant conducting a 5-minute preparation assessment call for {patient['name']}'s upcoming knee replacement surgery.
 
-CALL PURPOSE: {structure['call_purpose']}
-FOCUS TOPIC: {focus_topic}
+PATIENT: {patient['name']} | Surgery: {patient['surgery_date']} ({patient['days_until_surgery']} days away)
 
-PATIENT INFORMATION:
-- Name: {patient['name']}
-- Surgery Date: {patient['surgery_date']} ({patient['days_until_surgery']} days from today)
-- Days from Surgery: {context.days_from_surgery}
-- Current Compliance Score: {patient['current_compliance_score']}
-- Primary Physician: {patient['physician']}
+CALL OBJECTIVE: Weekly preparation check-in covering exactly 4 areas, then wrap-up.
 
-EDUCATIONAL APPROACH:
-- Tone: {structure.get('tone', 'educational_encouraging')} - Be warm, informative, and supportive
-- Duration: {context.estimated_duration_minutes} minutes
-- Build on previous conversations and check progress since last call
-- Focus on practical, actionable information
-- Encourage questions and provide clear explanations
+4 REQUIRED AREAS (must cover in order, one question at a time):
+1. Home safety and trip hazard removal
+2. Equipment and supplies (raised toilet seat, grabber tool)
+3. Medical preparation and blood-thinning medications
+4. Support system verification
 
-THIS WEEK'S FOCUS: {focus_topic}
+STRICT CONVERSATION RULES:
+- Ask ONLY ONE question at a time
+- Wait for response before asking next question
+- Cover areas in exact order listed above
+- Ask EXACTLY 2-3 questions within each area before moving to next area
+- NO additional topics or explanations
+- Once area has 2-3 questions answered → move to next area immediately
+- Focus on practical preparation status
+- Track question count per area and ensure thorough coverage
 
-CONVERSATION STRUCTURE:
-{self._get_week_specific_structure(context.days_from_surgery)}
+AUTOMATIC WRAP-UP TRIGGER:
+When ALL 4 areas are answered → Use this EXACT script:
+"Great progress. Your next call will be closer to your surgery date to confirm final logistics."
 
-CONVERSATION GUIDELINES:
-- Start with a brief, simple greeting - do NOT be verbose in your opening message
-- Ask ONE question at a time and wait for responses
-- Provide information in digestible chunks
-- Use examples relevant to their situation
-- Reference and build upon previous conversations naturally
-- Encourage questions throughout the conversation
-- End with clear next steps and what to expect next week
+TONE: Supportive and practical. Focus on preparation readiness and identify any gaps.
+"""
+        else:
+            # History-aware prompt for ongoing conversations with automatic termination
+            system_prompt = f"""
+You are a caring AI healthcare assistant continuing a 5-minute preparation assessment call with {patient['name']}.
 
-EDUCATIONAL OBJECTIVES:
-{self._format_objectives(structure.get('expected_outcomes', []))}
+PATIENT: {patient['name']} | Surgery: {patient['surgery_date']} ({patient['days_until_surgery']} days away)
 
-Remember: This is an educational conversation, not an assessment. Focus on teaching, clarifying, and building confidence for their upcoming surgery.
+CRITICAL CONVERSATION ANALYSIS:
+Before responding, analyze conversation history and check off what's been covered:
+□ Home safety and trip hazard removal
+□ Equipment and supplies (raised toilet seat, grabber tool)
+□ Medical preparation and blood-thinning medications
+□ Support system verification
+
+RESPONSE DECISION TREE:
+1. If ALL 4 boxes checked → END CALL with wrap-up script below
+2. If any unchecked → Ask about ONLY the next unchecked area
+3. NEVER ask about already-covered topics
+4. NEVER ask multiple questions in one response
+5. Ask EXACTLY 2-3 questions per area before moving to next area
+6. Focus on practical preparation status
+
+WRAP-UP SCRIPT (use when all 4 areas covered):
+"Great progress. Your next call will be closer to your surgery date to confirm final logistics."
+
+ESCALATION: Flag if unsafe home environment, missing medical clearances, equipment not available, or inadequate support system.
+
+TONE: Supportive, practical, focused on preparation readiness.
 """
 
+        # Build user prompt based on whether this is initial call or ongoing conversation
         if is_initial_call:
             user_prompt = f"""
-Begin the {week} educational call with {patient['name']}. 
+Begin the preparation assessment call with {patient['name']}.
 
-Start with a simple, warm greeting and ask how they're feeling since your last conversation. Keep it brief and natural.
+Start with this EXACT greeting:
+"Hello {patient['name']}, this is your healthcare assistant calling about your upcoming knee replacement surgery on {patient['surgery_date']}. This is your weekly preparation check-in to make sure everything is ready for your surgery. Is this a good time to talk?"
 
-DO NOT launch into educational content immediately or explain what you'll cover today. Just establish rapport first.
+DO NOT ask any assessment questions yet. Wait for their response to confirm good timing first.
 """
         else:
             user_prompt = f"""
-Continue the {week} educational conversation with {patient['name']} about {focus_topic.lower()}.
+Continue the preparation assessment conversation with {patient['name']}.
 
 CRITICAL INSTRUCTIONS:
-- Review conversation history to see what's been covered
-- Continue naturally from where you left off
-- Do not repeat information already provided
-- Ask follow-up questions to ensure understanding
-- Progress through the educational content systematically
-- Reference their specific responses when building on topics
+- This is NOT the start of the call - continue from where we left off
+- Review conversation history to identify what's already been covered
+- Ask ONLY about the next uncovered area from the 4 required areas
+- If all 4 areas covered → Use wrap-up script immediately
+- ONE question only - be conversational and acknowledge their previous responses
+- Focus on practical preparation status
+
+Continue with the appropriate next step based on conversation history.
 """
 
         return {
@@ -208,12 +236,13 @@ CRITICAL INSTRUCTIONS:
                 "call_type": context.call_type.value,
                 "patient_id": patient['patient_id'],
                 "days_from_surgery": context.days_from_surgery,
-                "week": week,
-                "focus_topic": focus_topic,
                 "estimated_duration": context.estimated_duration_minutes,
-                "educational_objectives": structure.get('expected_outcomes', [])
+                "focus_areas": context.focus_areas,
+                "escalation_triggers": context.escalation_triggers
             }
         }
+    
+    # Removed _generate_education_prompt and all education call handling
     
     def _get_week_specific_structure(self, days_from_surgery: int) -> str:
         """Get detailed conversation structure for specific week"""
@@ -405,3 +434,13 @@ CRITICAL INSTRUCTIONS:
                 "escalation_reasons": []
             }
         } 
+
+# Global instance
+_context_injection_service = None
+
+def get_context_injection_service() -> ContextInjectionService:
+    """Get context injection service instance"""
+    global _context_injection_service
+    if _context_injection_service is None:
+        _context_injection_service = ContextInjectionService()
+    return _context_injection_service

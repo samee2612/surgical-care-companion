@@ -9,8 +9,10 @@ from typing import List, Optional, Union, Any
 from datetime import datetime, timedelta
 import uuid
 
-from database.connection import get_db
-from models import Patient, ClinicalStaff, CallSession
+from backend.database.connection import get_db
+from backend.models.patient import Patient
+from backend.models.clinical_staff import ClinicalStaff
+from backend.models.call_session import CallSession
 from pydantic import BaseModel, ConfigDict
 
 router = APIRouter()
@@ -75,7 +77,7 @@ async def enroll_patient(patient_data: PatientCreate, db: Session = Depends(get_
         call_schedule = [
             (-35, "initial_clinical_assessment"),  # 5 weeks pre-op (4-6 weeks range)
             (-28, "education"),  # Week 4
-            (-21, "education"),  # Week 3
+            (-21, "preparation"),  # Week 3 - Preparation call
             (-14, "education"),  # Week 2
             (-7, "education"),   # Week 1
             (-1, "final_prep")
