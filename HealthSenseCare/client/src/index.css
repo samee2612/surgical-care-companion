@@ -1,0 +1,129 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: hsl(248, 100%, 99%);
+  --foreground: hsl(240, 10%, 3.9%);
+  --muted: hsl(210, 40%, 98%);
+  --muted-foreground: hsl(215, 16%, 47%);
+  --popover: hsl(0, 0%, 100%);
+  --popover-foreground: hsl(240, 10%, 3.9%);
+  --card: hsl(0, 0%, 100%);
+  --card-foreground: hsl(240, 10%, 3.9%);
+  --border: hsl(214, 32%, 91%);
+  --input: hsl(214, 32%, 91%);
+  --primary: hsl(220, 91%, 54%);
+  --primary-foreground: hsl(220, 100%, 99%);
+  --secondary: hsl(210, 40%, 98%);
+  --secondary-foreground: hsl(222, 84%, 4.9%);
+  --accent: hsl(210, 40%, 98%);
+  --accent-foreground: hsl(222, 84%, 4.9%);
+  --destructive: hsl(0, 84%, 60%);
+  --destructive-foreground: hsl(60, 9%, 98%);
+  --ring: hsl(220, 91%, 54%);
+  --radius: 0.5rem;
+  --medical-blue: hsl(220, 91%, 54%);
+  --medical-blue-dark: hsl(216, 87%, 40%);
+  --medical-green: hsl(160, 84%, 39%);
+  --medical-green-dark: hsl(158, 64%, 52%);
+  --medical-gray: hsl(215, 16%, 47%);
+  --medical-light: hsl(210, 40%, 98%);
+}
+
+.dark {
+  --background: hsl(240, 10%, 3.9%);
+  --foreground: hsl(0, 0%, 98%);
+  --muted: hsl(240, 3.7%, 15.9%);
+  --muted-foreground: hsl(240, 5%, 64.9%);
+  --popover: hsl(240, 10%, 3.9%);
+  --popover-foreground: hsl(0, 0%, 98%);
+  --card: hsl(240, 10%, 3.9%);
+  --card-foreground: hsl(0, 0%, 98%);
+  --border: hsl(240, 3.7%, 15.9%);
+  --input: hsl(240, 3.7%, 15.9%);
+  --primary: hsl(220, 91%, 54%);
+  --primary-foreground: hsl(220, 100%, 99%);
+  --secondary: hsl(240, 3.7%, 15.9%);
+  --secondary-foreground: hsl(0, 0%, 98%);
+  --accent: hsl(240, 3.7%, 15.9%);
+  --accent-foreground: hsl(0, 0%, 98%);
+  --destructive: hsl(0, 62.8%, 30.6%);
+  --destructive-foreground: hsl(0, 0%, 98%);
+  --ring: hsl(240, 4.9%, 83.9%);
+  --radius: 0.5rem;
+  --medical-blue: hsl(220, 91%, 54%);
+  --medical-blue-dark: hsl(216, 87%, 40%);
+  --medical-green: hsl(160, 84%, 39%);
+  --medical-green-dark: hsl(158, 64%, 52%);
+  --medical-gray: hsl(215, 16%, 47%);
+  --medical-light: hsl(240, 3.7%, 15.9%);
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply font-sans antialiased bg-background text-foreground;
+  }
+}
+
+@layer utilities {
+  .text-medical-blue {
+    color: var(--medical-blue);
+  }
+  
+  .text-medical-blue-dark {
+    color: var(--medical-blue-dark);
+  }
+  
+  .text-medical-green {
+    color: var(--medical-green);
+  }
+  
+  .text-medical-green-dark {
+    color: var(--medical-green-dark);
+  }
+  
+  .text-medical-gray {
+    color: var(--medical-gray);
+  }
+  
+  .bg-medical-blue {
+    background-color: var(--medical-blue);
+  }
+  
+  .bg-medical-blue-dark {
+    background-color: var(--medical-blue-dark);
+  }
+  
+  .bg-medical-green {
+    background-color: var(--medical-green);
+  }
+  
+  .bg-medical-green-dark {
+    background-color: var(--medical-green-dark);
+  }
+  
+  .bg-medical-light {
+    background-color: var(--medical-light);
+  }
+  
+  .border-medical-blue {
+    border-color: var(--medical-blue);
+  }
+  
+  .hover\:bg-medical-blue-dark:hover {
+    background-color: var(--medical-blue-dark);
+  }
+  
+  .hover\:text-medical-blue-dark:hover {
+    color: var(--medical-blue-dark);
+  }
+  
+  .focus\:ring-medical-blue:focus {
+    --tw-ring-color: var(--medical-blue);
+  }
+}
