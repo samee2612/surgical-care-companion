@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Preparation Call Test - Tests the updated backend logic for preparation calls with question counting
+Test Preparation Call - Demonstrates the new preparation call functionality
 """
 
 import sys
