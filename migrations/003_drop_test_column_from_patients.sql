@@ -1,0 +1,1 @@
+ALTER TABLE patients DROP COLUMN test_column; 

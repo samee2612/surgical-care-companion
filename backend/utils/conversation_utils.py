@@ -72,26 +72,39 @@ def get_covered_areas(history: List[Dict[str, str]], call_type: str = "initial_c
             result[f"{area}_questions_answered"] = data["questions_answered"]
         
         return result
-    else:
-        # Clinical assessment areas (default) - keep existing logic
-        covered = {
-            "surgery_confirmation": False,
+    else: # Initial Clinical Assessment
+        coverage = {
+            "surgery_date_confirmation": False,
+            "feelings_assessment": False,
             "pain_level": False,
             "activity_limitations": False,
-            "support_system": False
+            "support_system": False,
         }
-        for turn in history:
-            content = turn["content"].lower()
-            if not covered["surgery_confirmation"] and any(word in content for word in ["surgery", "date", "operation", "scheduled", "upcoming"]) and (
-                "confirm" in content or "yes" in content or "right" in content or "correct" in content
-            ):
-                covered["surgery_confirmation"] = True
-            if not covered["pain_level"] and any(word in content for word in ["pain", "1 to 10", "scale", "rate your pain", "how much pain", "8", "7", "6", "5", "4", "3", "2", "1", "9", "10"]):
-                covered["pain_level"] = True
-            if not covered["activity_limitations"] and any(word in content for word in ["activity", "limit", "walk", "move", "mobility", "stairs", "standing", "daily tasks", "trouble", "difficulty"]):
-                covered["activity_limitations"] = True
-            if not covered["support_system"] and any(word in content for word in ["support", "help", "caregiver", "family", "friend", "someone", "assist", "partner", "spouse"]) and (
-                "who will help" in content or "who will be helping" in content or "who can help" in content or "support person" in content or "caregiver" in content or "family member" in content or "friend" in content or "partner" in content or "spouse" in content or "someone who will" in content or "help you out" in content or "take care of" in content
-            ):
-                covered["support_system"] = True
-        return covered 
+        
+        assistant_text = " ".join([msg.get("content", "") or "" for msg in history if msg['role'] == 'assistant']).lower()
+        user_text = " ".join([msg.get("content", "") or "" for msg in history if msg['role'] == 'user']).lower()
+
+        # More robust checks for Q&A patterns
+        if "surgery scheduled for" in assistant_text and ("correct" in assistant_text or "right" in assistant_text):
+            if "yes" in user_text or "right" in user_text or "correct" in user_text:
+                coverage["surgery_date_confirmation"] = True
+
+        feeling_keywords = ["anxious", "nervous", "worried", "scared", "excited", "concerned", "feeling", "fine", "good", "bad"]
+        if "how are you feeling" in assistant_text and any(keyword in user_text for keyword in feeling_keywords):
+            coverage["feelings_assessment"] = True
+
+        if "on a scale of 1 to 10" in assistant_text and "pain" in assistant_text:
+            if any(char.isdigit() for char in user_text):
+                coverage["pain_level"] = True
+
+        if "activities" in assistant_text and ("difficult" in assistant_text or "challenging" in assistant_text):
+            # Check if user mentioned any activity (simple heuristic)
+            if len(user_text.split()) > 2 and "nothing" not in user_text:
+                coverage["activity_limitations"] = True
+        
+        support_keywords = ["husband", "wife", "friend", "family", "yes", "daughter", "son", "partner", "spouse", "right", "correct", "yep", "sure"]
+        if "someone to help" in assistant_text or "who can help" in assistant_text:
+            if any(keyword in user_text for keyword in support_keywords):
+                coverage["support_system"] = True
+    
+    return coverage 

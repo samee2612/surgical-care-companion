@@ -9,8 +9,7 @@ from datetime import datetime, timedelta
 from dataclasses import dataclass
 from enum import Enum
 
-from backend.models.patient import Patient
-from backend.models.call_session import CallSession
+# Remove or stub out model imports, use direct imports for any remaining modules.
 
 
 class CallType(Enum):
@@ -95,10 +94,10 @@ class CallContextService:
             }
         }
     
-    def get_call_context(self, patient: Patient, call_session: CallSession) -> CallContext:
+    def get_call_context(self, patient: Any, call_session: Any) -> CallContext:
         """Generate complete call context for a patient call"""
         
-        call_type = CallType(call_session.call_type)
+        call_type = CallType(call_session['call_type'])
         call_definition = self.call_definitions[call_type]
         
         # Build patient data context
@@ -119,27 +118,25 @@ class CallContextService:
             estimated_duration_minutes=call_definition["duration_minutes"]
         )
     
-    def _build_patient_context(self, patient: Patient, call_session: CallSession) -> Dict[str, Any]:
+    def _build_patient_context(self, patient: Any, call_session: Any) -> Dict[str, Any]:
         """Build patient-specific context data"""
         
         # Calculate surgery timing
-        days_until_surgery = (patient.surgery_date - datetime.now()).days
+        days_until_surgery = (patient["surgery_date"] - datetime.now()).days
         
         return {
-            "patient_id": str(patient.id),
-            "name": patient.name,
-            "surgery_date": patient.surgery_date.isoformat(),
+            "patient_id": str(patient['id']),
+            "name": f"{patient['first_name']} {patient['last_name']}",
+            "surgery_date": patient["surgery_date"].isoformat(),
             "days_until_surgery": days_until_surgery,
-            "days_from_surgery": call_session.days_from_surgery,
-            "primary_phone": patient.primary_phone_number,
-            "current_compliance_score": patient.overall_compliance_score,
-            "readiness_status": patient.surgery_readiness_status,
-            "physician_id": getattr(patient, "primary_physician_id", None),
-            "physician": str(getattr(patient, "primary_physician_id", None)) if getattr(patient, "primary_physician_id", None) else "Unknown",
-            "call_history": self._get_previous_call_summary(patient)
+            "days_from_surgery": call_session['days_from_surgery'],
+            "primary_phone": patient['primary_phone'],
+            "current_compliance_score": patient.get('overall_compliance_score', 0.0),
+            "readiness_status": patient['surgery_readiness_status'],
+            "previous_calls": self._get_previous_call_summary(patient),
         }
     
-    def _get_previous_call_summary(self, patient: Patient) -> List[Dict[str, Any]]:
+    def _get_previous_call_summary(self, patient: Any) -> List[Dict[str, Any]]:
         """Get summary of previous calls for context"""
         # For now, return empty list since Patient model doesn't have call_sessions relationship
         # In production, this would query the database for call sessions by patient_id
@@ -156,7 +153,6 @@ class CallContextService:
             return {"sections": [], "flow": "standard"}
     
     def _build_initial_clinical_assessment_structure(self) -> Dict[str, Any]:
-        print("FUCK OFF")
         """Build conversation structure for initial clinical assessment call (4-6 weeks pre-op)"""
         
         return {

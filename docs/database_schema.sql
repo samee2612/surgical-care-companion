@@ -22,15 +22,17 @@ CREATE TABLE clinical_staff (
 
 CREATE TABLE patients (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name VARCHAR(255) NOT NULL,
-    primary_phone_number VARCHAR(20) NOT NULL,
-    secondary_phone_number VARCHAR(20),
+    first_name VARCHAR(255) NOT NULL,
+    last_name VARCHAR(255) NOT NULL,
+    date_of_birth DATE,
+    primary_phone VARCHAR(20) NOT NULL,
+    secondary_phone VARCHAR(20),
     surgery_date TIMESTAMP NOT NULL,
-    primary_physician_id UUID NOT NULL REFERENCES clinical_staff(id),
+    primary_physician_id UUID REFERENCES clinical_staff(id), -- Made nullable for easier enrollment
     
     -- Core readiness tracking
     surgery_readiness_status VARCHAR(30) NOT NULL DEFAULT 'done',
-    -- Values: 'done', 'pending'
+    report JSON NOT NULL DEFAULT '{}'::json,
     
     overall_compliance_score FLOAT DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -59,11 +61,13 @@ CREATE TABLE call_sessions (
     call_outcome VARCHAR(50), -- 'successful', 'no_answer', 'concerning'
     
     -- AI agent summary (contains everything)
+    conversation_history JSON NOT NULL DEFAULT '[]'::json,
     agent_notes TEXT, -- AI writes structured summary here
     compliance_score INTEGER, -- Overall call score 0-100
     concerns_identified TEXT[], -- Array of specific concerns
     
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- ============================================================================
@@ -71,8 +75,7 @@ CREATE TABLE call_sessions (
 -- ============================================================================
 
 -- Patient indexes
-CREATE INDEX idx_patients_primary_phone ON patients(primary_phone_number);
-CREATE INDEX idx_patients_secondary_phone ON patients(secondary_phone_number);
+CREATE INDEX idx_patients_primary_phone ON patients(primary_phone);
 CREATE INDEX idx_patients_surgery_date ON patients(surgery_date);
 CREATE INDEX idx_patients_physician ON patients(primary_physician_id);
 
@@ -96,19 +99,4 @@ INSERT INTO clinical_staff (name, email, role) VALUES
 ('Dr. Sarah Johnson', 'sarah.johnson@hospital.com', 'surgeon'),
 ('Nurse Mary Wilson', 'mary.wilson@hospital.com', 'nurse'),
 ('Care Coordinator Tom Brown', 'tom.brown@hospital.com', 'coordinator');
-
--- Sample patient
-INSERT INTO patients (name, primary_phone_number, secondary_phone_number, surgery_date, primary_physician_id)
-VALUES ('John Smith', '+1234567890', '+1234567891', '2024-01-15', 
-        (SELECT id FROM clinical_staff WHERE email = 'sarah.johnson@hospital.com'));
-
--- Auto-generate all calls for the patient
-INSERT INTO call_sessions (patient_id, stage, surgery_type, scheduled_date, days_from_surgery, call_type)
-VALUES 
-  ((SELECT id FROM patients WHERE name = 'John Smith'), 'preop', 'knee', '2023-12-04', -42, 'enrollment'),
-  ((SELECT id FROM patients WHERE name = 'John Smith'), 'preop', 'knee', '2023-12-18', -28, 'education'),
-  ((SELECT id FROM patients WHERE name = 'John Smith'), 'preop', 'knee', '2023-12-25', -21, 'education'),
-  ((SELECT id FROM patients WHERE name = 'John Smith'), 'preop', 'knee', '2024-01-01', -14, 'preparation'),
-  ((SELECT id FROM patients WHERE name = 'John Smith'), 'preop', 'knee', '2024-01-08', -7, 'preparation'),
-  ((SELECT id FROM patients WHERE name = 'John Smith'), 'preop', 'knee', '2024-01-14', -1, 'final_prep');
  

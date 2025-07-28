@@ -6,6 +6,7 @@ Handles prompt generation and context formatting for the LLM.
 
 from typing import Dict, List, Any
 from dataclasses import asdict
+from datetime import datetime
 
 from .call_context_service import CallContext, CallType, ConversationSection
 
@@ -32,25 +33,33 @@ class ContextInjectionService:
         
         # Extract patient data
         patient = context.patient_data
-        structure = context.conversation_structure
-        
-        # Build different system prompts for initial vs ongoing conversations
+        s_date = datetime.fromisoformat(patient['surgery_date']) if isinstance(patient['surgery_date'], str) else patient['surgery_date']
+        patient['surgery_date_str'] = s_date.strftime('%B %d, %Y')
+
         if is_initial_call:
-            # Streamlined prompt for starting the conversation
             system_prompt = f"""
 You are a caring AI healthcare assistant conducting a 3-minute initial clinical assessment call for {patient['name']}'s upcoming knee replacement surgery.
 
-PATIENT: {patient['name']} | Surgery: {patient['surgery_date']} ({patient['days_until_surgery']} days away)
+PATIENT: {patient['name']} | Surgery: {patient['surgery_date_str']} ({patient['days_until_surgery']} days away)
 
-CALL OBJECTIVE: Efficient assessment covering exactly 4 areas, then IMMEDIATE wrap-up.
+5 REQUIRED AREAS (must cover in order, one question at a time):
+1. Surgery Date Confirmation
+2. Feelings Assessment
+3. Pain Level
+4. Activity Limitations
+5. Support System
 
-4 REQUIRED AREAS (must cover in order, one question at a time):
-1. Surgery confirmation and feelings
-2. Current pain level (1-10 scale)
-3. Main activity limitations  
-4. Support system availability
+STRICT CONVERSATION FLOW:
+- Your FIRST task is 'Surgery Date Confirmation'. Ask ONLY: "I have your surgery scheduled for {patient['surgery_date_str']}, is that correct?"
+- After they respond, your SECOND task is 'Feelings Assessment'. Ask ONLY: "Thank you. And how are you feeling about the surgery as it approaches?"
+- Proceed through the remaining areas ONE BY ONE.
+- After the user provides a direct answer for an area, you MUST move to the next area. DO NOT ask clarifying or follow-up questions.
 
 STRICT CONVERSATION RULES:
+- After the patient confirms it's a good time to talk, your first response MUST be ONLY this question: "I have your surgery scheduled for {patient['surgery_date_str']}. Is that correct?"
+- DO NOT ask for their feelings or anything else in that first question.
+- AFTER they confirm the date is correct, your SECOND question MUST be ONLY: "Thank you for confirming. How are you feeling about the surgery as it approaches?"
+- Then, proceed through the remaining areas in order.
 - Ask ONLY ONE question at a time
 - Wait for response before asking next question
 - Cover areas in exact order listed above
@@ -70,11 +79,12 @@ TONE: Warm but efficient. Get essential info and end call naturally.
             system_prompt = f"""
 You are a caring AI healthcare assistant continuing a 3-minute clinical assessment call with {patient['name']}.
 
-PATIENT: {patient['name']} | Surgery: {patient['surgery_date']} ({patient['days_until_surgery']} days away)
+PATIENT: {patient['name']} | Surgery: {patient['surgery_date_str']} ({patient['days_until_surgery']} days away)
 
 CRITICAL CONVERSATION ANALYSIS:
 Before responding, analyze conversation history and check off what's been covered:
-□ Surgery confirmation (asked about surgery date/feelings)
+□ Surgery confirmation (confirmedsurgery date)
+□ Feelings before surgery (asked about feelings)
 □ Pain level (asked for 1-10 pain rating)
 □ Activity limitations (asked what activities are difficult)
 □ Support system (asked who will help after surgery)
@@ -105,7 +115,7 @@ Begin the initial clinical assessment call with {patient['name']}.
 Start with ONLY this greeting:
 "Hello {patient['name']}, this is your healthcare assistant calling about your upcoming knee replacement surgery. Is this a good time to talk?"
 
-DO NOT ask any assessment questions yet. Wait for their response to confirm good timing first.
+DO NOT mention the surgery date yet. After they confirm it's a good time, your first question should be to confirm the surgery date.
 """
         else:
             user_prompt = f"""

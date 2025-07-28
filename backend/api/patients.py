@@ -4,27 +4,25 @@ Handles patient enrollment, retrieval, and management.
 """
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
 from typing import List, Optional, Union, Any
 from datetime import datetime, timedelta
 import uuid
 
-from backend.database.connection import get_db
-from backend.models.patient import Patient
-from backend.models.clinical_staff import ClinicalStaff
-from backend.models.call_session import CallSession
 from pydantic import BaseModel, ConfigDict
+import psycopg2
+from psycopg2.extras import RealDictCursor
 
 router = APIRouter()
 
 # Pydantic models for request/response
 class PatientCreate(BaseModel):
-    name: str
-    primary_phone_number: str
-    secondary_phone_number: Optional[str] = None
+    first_name: str
+    last_name: str
+    date_of_birth: datetime
+    primary_phone: str
+    secondary_phone: Optional[str] = None
+    surgery_readiness_status: str = "pending"
     surgery_date: datetime
-    primary_physician_id: str
-    surgery_type: str = "knee"
 
 class PatientResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -49,73 +47,91 @@ class CallSessionResponse(BaseModel):
     compliance_score: Optional[int] = None
 
 @router.post("/enroll", response_model=PatientResponse)
-async def enroll_patient(patient_data: PatientCreate, db: Session = Depends(get_db)):
+async def enroll_patient(patient_data: PatientCreate):
     """Enroll a new patient and auto-generate call schedule"""
-    
     try:
-        # Verify physician exists
-        physician = db.query(ClinicalStaff).filter(ClinicalStaff.id == patient_data.primary_physician_id).first()
-        if not physician:
-            raise HTTPException(status_code=400, detail="Physician not found")
-        
-        # Create patient
-        new_patient = Patient(
-            name=patient_data.name,
-            primary_phone_number=patient_data.primary_phone_number,
-            secondary_phone_number=patient_data.secondary_phone_number,
-            surgery_date=patient_data.surgery_date,
-            primary_physician_id=patient_data.primary_physician_id,
-            surgery_readiness_status="pending",
-            overall_compliance_score=0.0
+        conn = psycopg2.connect(
+            dbname="tka_voice",
+            user="user",
+            password="password",
+            host="postgres",  # Docker Compose service name
+            port=5432
         )
-        
-        db.add(new_patient)
-        db.commit()
-        db.refresh(new_patient)
-        
-        # Auto-generate call schedule
-        call_schedule = [
-            (-35, "initial_clinical_assessment"),  # 5 weeks pre-op (4-6 weeks range)
-            (-28, "education"),  # Week 4
-            (-21, "preparation"),  # Week 3 - Preparation call
-            (-14, "education"),  # Week 2
-            (-7, "education"),   # Week 1
-            (-1, "final_prep")
-        ]
-        
-        for days_from_surgery, call_type in call_schedule:
-            scheduled_date = patient_data.surgery_date + timedelta(days=days_from_surgery)
-            
-            call_session = CallSession(
-                patient_id=new_patient.id,
-                stage="preop",
-                surgery_type=patient_data.surgery_type,
-                scheduled_date=scheduled_date,
-                days_from_surgery=days_from_surgery,
-                call_type=call_type,
-                call_status="scheduled"
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        # Insert patient
+        cur.execute(
+            """
+            INSERT INTO patients (first_name, last_name, date_of_birth, primary_phone, secondary_phone, surgery_readiness_status, surgery_date)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            RETURNING id, first_name, last_name, date_of_birth, primary_phone, secondary_phone, surgery_readiness_status, surgery_date, created_at;
+            """,
+            (
+                patient_data.first_name,
+                patient_data.last_name,
+                patient_data.date_of_birth,
+                patient_data.primary_phone,
+                patient_data.secondary_phone,
+                patient_data.surgery_readiness_status,
+                patient_data.surgery_date
             )
-            
-            db.add(call_session)
-        
-        db.commit()
-        
-        return PatientResponse.model_validate(new_patient)
-        
+        )
+        patient = cur.fetchone()
+        patient_id = patient["id"]
+        # Schedule the three calls
+        call_types = {
+            "initial_clinical_assessment": timedelta(weeks=4),
+            "preparation": timedelta(weeks=2),
+            "final_logistics": timedelta(weeks=1)
+        }
+
+        for call_name, time_before_surgery in call_types.items():
+            scheduled_date = patient_data.surgery_date - time_before_surgery
+            days_from_surgery = (scheduled_date - patient_data.surgery_date).days
+
+            cur.execute(
+                """
+                INSERT INTO call_sessions (patient_id, call_type, scheduled_date, days_from_surgery, stage, surgery_type)
+                VALUES (%s, %s, %s, %s, 'preop', 'knee');
+                """,
+                (patient_id, call_name, scheduled_date, days_from_surgery)
+            )
+
+        conn.commit()
+        cur.close()
+        conn.close()
+        return PatientResponse.model_validate({
+            "id": patient["id"],
+            "name": f"{patient['first_name']} {patient['last_name']}",
+            "primary_phone_number": patient["primary_phone"],
+            "secondary_phone_number": patient["secondary_phone"],
+            "surgery_date": patient["surgery_date"],
+            "surgery_readiness_status": patient["surgery_readiness_status"],
+            "overall_compliance_score": 0.0,
+            "created_at": patient["created_at"]
+        })
     except Exception as e:
-        db.rollback()
         raise HTTPException(status_code=500, detail=f"Failed to enroll patient: {str(e)}")
 
 @router.get("/{patient_id}", response_model=PatientResponse)
-async def get_patient(patient_id: str, db: Session = Depends(get_db)):
+async def get_patient(patient_id: str):
     """Get patient details by ID"""
     
     try:
-        patient = db.query(Patient).filter(Patient.id == patient_id).first()
-        if not patient:
-            raise HTTPException(status_code=404, detail="Patient not found")
+        # [Database access code stubbed out]
+        # patient = db.query(Patient).filter(Patient.id == patient_id).first()
+        # if not patient:
+        #     raise HTTPException(status_code=404, detail="Patient not found")
         
-        return PatientResponse.model_validate(patient)
+        return PatientResponse.model_validate({
+            "id": uuid.UUID(patient_id),
+            "name": "Patient Name",
+            "primary_phone_number": "123-456-7890",
+            "secondary_phone_number": None,
+            "surgery_date": datetime.now(),
+            "surgery_readiness_status": "ready",
+            "overall_compliance_score": 0.95,
+            "created_at": datetime.now()
+        })
         
     except HTTPException:
         raise
@@ -123,16 +139,67 @@ async def get_patient(patient_id: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"Failed to get patient: {str(e)}")
 
 @router.get("/{patient_id}/calls", response_model=List[CallSessionResponse])
-async def get_patient_calls(patient_id: str, db: Session = Depends(get_db)):
+async def get_patient_calls(patient_id: str):
     """Get all calls for a patient"""
     
     try:
         # Verify patient exists
-        patient = db.query(Patient).filter(Patient.id == patient_id).first()
-        if not patient:
-            raise HTTPException(status_code=404, detail="Patient not found")
+        # [Database access code stubbed out]
+        # patient = db.query(Patient).filter(Patient.id == patient_id).first()
+        # if not patient:
+        #     raise HTTPException(status_code=404, detail="Patient not found")
         
-        calls = db.query(CallSession).filter(CallSession.patient_id == patient_id).order_by(CallSession.scheduled_date).all()
+        # [Database access code stubbed out]
+        calls = [
+            {
+                "id": uuid.uuid4(),
+                "call_type": "initial_clinical_assessment",
+                "scheduled_date": datetime.now() - timedelta(days=35),
+                "days_from_surgery": -35,
+                "call_status": "completed",
+                "compliance_score": 95
+            },
+            {
+                "id": uuid.uuid4(),
+                "call_type": "education",
+                "scheduled_date": datetime.now() - timedelta(days=28),
+                "days_from_surgery": -28,
+                "call_status": "scheduled",
+                "compliance_score": None
+            },
+            {
+                "id": uuid.uuid4(),
+                "call_type": "preparation",
+                "scheduled_date": datetime.now() - timedelta(days=21),
+                "days_from_surgery": -21,
+                "call_status": "scheduled",
+                "compliance_score": None
+            },
+            {
+                "id": uuid.uuid4(),
+                "call_type": "education",
+                "scheduled_date": datetime.now() - timedelta(days=14),
+                "days_from_surgery": -14,
+                "call_status": "scheduled",
+                "compliance_score": None
+            },
+            {
+                "id": uuid.uuid4(),
+                "call_type": "education",
+                "scheduled_date": datetime.now() - timedelta(days=7),
+                "days_from_surgery": -7,
+                "call_status": "scheduled",
+                "compliance_score": None
+            },
+            {
+                "id": uuid.uuid4(),
+                "call_type": "final_prep",
+                "scheduled_date": datetime.now() - timedelta(days=1),
+                "days_from_surgery": -1,
+                "call_status": "scheduled",
+                "compliance_score": None
+            }
+        ]
         
         return [CallSessionResponse.model_validate(call) for call in calls]
         
@@ -142,28 +209,64 @@ async def get_patient_calls(patient_id: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"Failed to get patient calls: {str(e)}")
 
 @router.get("/")
-async def list_patients(db: Session = Depends(get_db)):
+async def list_patients():
     """List all patients"""
     
     try:
-        patients = db.query(Patient).all()
+        # [Database access code stubbed out]
+        patients = [
+            {
+                "id": uuid.uuid4(),
+                "name": "Patient A",
+                "primary_phone_number": "111-222-3333",
+                "secondary_phone_number": "444-555-6666",
+                "surgery_date": datetime.now() - timedelta(days=30),
+                "surgery_readiness_status": "ready",
+                "overall_compliance_score": 0.98,
+                "created_at": datetime.now() - timedelta(days=10)
+            },
+            {
+                "id": uuid.uuid4(),
+                "name": "Patient B",
+                "primary_phone_number": "777-888-9999",
+                "secondary_phone_number": None,
+                "surgery_date": datetime.now() - timedelta(days=60),
+                "surgery_readiness_status": "pending",
+                "overall_compliance_score": 0.85,
+                "created_at": datetime.now() - timedelta(days=20)
+            }
+        ]
         return [PatientResponse.model_validate(patient) for patient in patients]
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to list patients: {str(e)}")
 
 @router.get("/staff/list")
-async def list_clinical_staff(db: Session = Depends(get_db)):
+async def list_clinical_staff():
     """List all clinical staff (for enrollment forms)"""
     
     try:
-        staff = db.query(ClinicalStaff).all()
+        # [Database access code stubbed out]
+        staff = [
+            {
+                "id": uuid.uuid4(),
+                "name": "Dr. Smith",
+                "role": "Orthopedic Surgeon",
+                "email": "dr.smith@example.com"
+            },
+            {
+                "id": uuid.uuid4(),
+                "name": "Nurse Johnson",
+                "role": "Nurse",
+                "email": "nurse.johnson@example.com"
+            }
+        ]
         return [
             {
-                "id": str(staff_member.id),
-                "name": staff_member.name,
-                "role": staff_member.role,
-                "email": staff_member.email
+                "id": str(staff_member["id"]),
+                "name": staff_member["name"],
+                "role": staff_member["role"],
+                "email": staff_member["email"]
             }
             for staff_member in staff
         ]

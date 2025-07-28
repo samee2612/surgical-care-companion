@@ -1,0 +1,1 @@
+ALTER TABLE patients RENAME COLUMN report TO report; 

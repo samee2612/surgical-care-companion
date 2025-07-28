@@ -1,6 +1,6 @@
 import os
 import logging
-from backend.config import settings
+from config import settings
 
 import google.generativeai as genai
 

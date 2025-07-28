@@ -34,6 +34,12 @@ class Settings(BaseSettings):
     DB_USER: str = "user"
     DB_PASSWORD: str = "password"
     DB_NAME: str = "tka_voice"
+    POSTGRES_DB: str = "tka_voice" # ADD THIS LINE
+    POSTGRES_USER: str = "user" # ADD THIS LINE
+    POSTGRES_PASSWORD: str = "password" # ADD THIS LINE
+    POSTGRES_HOST: str = "postgres" # ADD THIS LINE
+    POSTGRES_PORT: int = 5432 # ADD THIS LINE
+    TEST_PHONE_NUMBER: str = "" # ADD THIS LINE
     
     # Redis Configuration
     REDIS_URL: str = "redis://localhost:6379"

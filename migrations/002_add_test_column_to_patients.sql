@@ -1,0 +1,1 @@
+ALTER TABLE patients ADD COLUMN test_column VARCHAR(100); 

@@ -1,0 +1,13 @@
+# surgicalcompanian/Dockerfile.debug
+FROM alpine:latest
+WORKDIR /build_context_view
+
+# This copies the *contents* of your local backend/ directory into /build_context_view/
+COPY backend/ .
+
+# --- Corrected ls -l commands to check the expected paths ---
+RUN ls -l requirements.txt        
+RUN ls -l                         
+RUN ls -l models/                 
+RUN ls -l services/               
+# --- End corrected ls -l commands ---

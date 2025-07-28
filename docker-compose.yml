@@ -4,16 +4,16 @@ services:
     image: postgres:15-alpine
     container_name: tka_postgres
     environment:
-      POSTGRES_DB: tka_voice
-      POSTGRES_USER: user
-      POSTGRES_PASSWORD: password
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./docs/database_schema.sql:/docker-entrypoint-initdb.d/init.sql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U user -d tka_voice"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -50,11 +50,11 @@ services:
       - pgadmin_data:/var/lib/pgadmin
     restart: unless-stopped
 
-  # TKA Voice Agent Backend
+  # TKA Voice Agent Backend (Unified FastAPI + Flask Logic)
   backend:
     build:
-      context: ./backend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: backend/Dockerfile
     container_name: tka_backend
     depends_on:
       postgres:
@@ -62,48 +62,24 @@ services:
       redis:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgresql://user:password@postgres:5432/tka_voice
-      REDIS_URL: redis://redis:6379
-      ENVIRONMENT: development
-      DEBUG: true
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:${POSTGRES_PORT}/${POSTGRES_DB}
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      TEST_PHONE_NUMBER: ${TEST_PHONE_NUMBER}
+      HOST: ${HOST}
+      PORT: ${PORT}
+      RELOAD: ${RELOAD}
+      LOG_LEVEL: ${LOG_LEVEL}
     ports:
-      - "8000:8000"
+      - "${PORT:-8000}:${PORT:-8000}"
     volumes:
-      - ./backend:/app
-      - ./uploads:/app/uploads
-    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+      - .:/app
+    # CRUCIAL CHANGE: Removed "python scripts/init_db.py &&" from the command
+    command: >
+      sh -c "uvicorn backend.main:app --host 0.0.0.0 --port ${PORT:-8000} --reload"
     restart: unless-stopped
 
-  # TKA Voice Agent Frontend
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    container_name: tka_frontend
-    depends_on:
-      - backend
-    environment:
-      REACT_APP_API_URL: http://localhost:8000
-    ports:
-      - "3000:3000"
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
-    command: npm start
-    restart: unless-stopped
-
-  # Surgical Care PostgreSQL Database
-  surgicalcare_postgres:
-    image: postgres:16
-    container_name: surgicalcare_postgres
-    environment:
-      POSTGRES_USER: harsh
-      POSTGRES_PASSWORD: harshpassword
-      POSTGRES_DB: surgicalcare_db
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
+  # frontend: (still commented out)
+  #   ...
 
 volumes:
   postgres_data:
