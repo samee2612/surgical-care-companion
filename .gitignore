@@ -239,7 +239,6 @@ Thumbs.db
 uploads/
 downloads/
 audio_files/
-models/
 checkpoints/
 
 # API Keys and secrets

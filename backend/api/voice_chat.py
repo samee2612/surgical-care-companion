@@ -625,12 +625,9 @@ async def converse(request: ConverseRequest):
     Handles the core conversational logic and state management.
     """
     try:
-        print("Converse endpoint hit")
         # 1. Fetch Patient and Call Session Data using the shared db_manager
         patient_data = db_manager.get_patient_data(request.patient_id)
         call_session_data = db_manager.get_call_session_data(request.call_session_id)
-        print(f"Patient data: {patient_data}")
-        print(f"Call session data: {call_session_data}")
 
         if not patient_data:
             raise HTTPException(status_code=404, detail="Patient not found")
@@ -642,7 +639,6 @@ async def converse(request: ConverseRequest):
         agent_response_info = orchestrator.get_next_agent_response(
             patient_data, call_session_data, request.message # request.message is the user's input
         )
-        print(f"Agent response info: {agent_response_info}")
 
         # 3. Update Database with new state using the shared db_manager
         # Note: conversation_history, call_status, actual_call_start, call_duration_seconds
