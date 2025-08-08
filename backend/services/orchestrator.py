@@ -329,6 +329,9 @@ class ConversationOrchestrator:
         
         # Initialize/Load State
         conversation_history = call_session_data.get("conversation_history", [])
+        print(f"Conversation history loaded: {conversation_history}")
+        if not isinstance(conversation_history, list):
+            conversation_history = []
         extracted_report = dict(patient_data.get("report", {}))
         
         # For the very first turn:
